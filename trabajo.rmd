@@ -41,6 +41,8 @@ As we can see, the dataset contains 45,000 observations and 14 variables. The va
 
 ### Target Variable
 
+- **loan_status**: The status of the loan (integer 1 = approved; 0 = rejected)
+
 ```{r}
 # Contar los valores de 'loan_status'
 counts <- table(data$loan_status)
@@ -98,17 +100,17 @@ summary(data)
 
 ```{r}
 # Lista de variables numéricas
-numerical_vars <- c('person_age', 'person_income', 'person_emp_exp', 'loan_amnt', 
+numeric <- c('person_age', 'person_income', 'person_emp_exp', 'loan_amnt', 
                     'loan_int_rate', 'loan_percent_income', 
                     'cb_person_cred_hist_length', 'credit_score')
 
 
 # Distribuciones de las variables numéricas:
-for (var in numerical_vars) {
+for (n in numeric) {
   print(
-    ggplot(data, aes_string(x = var)) +
+    ggplot(data, aes_string(x = n)) +
       geom_histogram(fill = "lightblue", color = "white", bins = 30) +
-      labs(title = paste("Distribución de", var), x = var, y = "Frecuencia") +
+      labs(title = paste("Distribución de", n), x = n, y = "Frecuencia") +
       theme_minimal()
   )
 }
@@ -133,13 +135,13 @@ Esto puede indicarnos que las personas con un nivel educativo más alto son más
 - loan intent: The most common loan intents are both education and medical bills, followed by debt consolidation, venture and personal loans. Fewer people take out loans for home improvement. This variable may also be useful in predicting the loan status.
 
 ```{r}
-# Miramos la distribución de las variables categóricas:
+# Miramos los datos de las variables categóricas:
 cat <- c('person_gender', 'person_education', 'person_home_ownership', 'loan_intent', 'previous_loan_defaults_on_file')
 
 for (var in cat) {
   print(
     ggplot(data, aes_string(x = var)) +
-      geom_bar(fill = "skyblue") +
+      geom_bar(fill = "coral1") +
       labs(title = paste("Distribución de", var), x = var, y = "Frecuencia") +
       theme_minimal()
   )
@@ -153,7 +155,33 @@ for (var in cat) {
 ```{r}
 # Aplicamos el ggpairs para ver las relaciones entre las variables numéricas:
 # ggpairs(data)
+
+numeric_Corr <- data[, c('person_age', 'person_income', 'person_emp_exp', 'loan_amnt', 'loan_int_rate', 'loan_percent_income', 
+                         'cb_person_cred_hist_length', 'credit_score')]
+
+ggcorr(numeric_Corr, label = TRUE)
 ```
+Como podemos observar, 'credit_score' y 'loan_int_rate', apenas influyen, ya que sus correlaciones con las otras variables son prácticamente nulas.
+Por tanto procedemos a eliminarlas.
+
+```{r}
+names(data)
+```
+```{r}
+# Eliminar por posición
+data_Mod <- data[, -c(9, 12)]
+
+# Verificar las columnas restantes
+names(data_Mod)
+```
+```{r}
+numeric_Corr <- data[, c('person_age', 'person_income', 'person_emp_exp', 'loan_amnt', 'loan_percent_income', 
+                         'cb_person_cred_hist_length')]
+
+ggcorr(numeric_Corr, label = TRUE)
+```
+
+
 
 ### Missing Value Analysis
 
@@ -172,17 +200,6 @@ Como podemos ver, en ninguna de las variables hay valores faltantes, lo que nos 
 
 
 
-#### Target variable
-
-- **loan_status**: The status of the loan (integer 1 = approved; 0 = rejected)
-
-```{r}
-library(ggplot2)
-ggplot(data, aes(x=loan_status)) + 
-  geom_bar(fill="blue") + 
-  labs(title="Loan Status Distribution", x="Loan Status", y="Count")
-```
-
 ```{r}
 # Check for missing values
 sum(is.na(data))
@@ -191,11 +208,141 @@ sum(is.na(data))
 hist(data$loan_amnt, main="Distribution of Loan Amounts", xlab="Loan Amount", breaks=50)
 
 # Boxplot of loan amounts by grade
-boxplot(loan_amnt ~ grade, data=data, main="Loan Amounts by Grade", xlab="Grade", ylab="Loan Amount")
+#boxplot(loan_amnt ~ grade, data=data, main="Loan Amounts by Grade", xlab="Grade", ylab="Loan Amount")
 
 # Correlation matrix
-cor_matrix <- cor(data[, sapply(data, is.numeric)])
-corrplot::corrplot(cor_matrix, method="circle")
+#cor_matrix <- cor(data[, sapply(data, is.numeric)])
+#corrplot::corrplot(cor_matrix, method="circle")
 ```
 
+### Bivariate Analysis
+
+#### Numeric Variables
+
+```{r}
+# Creamos los plots para las 6 varaibles restantes: 
+p1 <- ggplot(data) + geom_boxplot(aes(x = factor(loan_status), y = person_age), fill = "violet", alpha = 0.6) +
+  theme(axis.title = element_text(size = 8.5)) +
+  labs(title = "Loan Status vs Person Age", x = "Loan Status", y = "Person Age") +
+  theme_minimal()
+
+print(p1)
+```
+
+```{r}
+p2 <- ggplot(data) + geom_boxplot(aes(x = factor(loan_status), y = person_income), fill = "#FFB6C1", alpha = 0.6) +
+  theme(axis.title = element_text(size = 8.5)) +
+  labs(title = "Loan Status vs Person Income", x = "Loan Status", y = "Person Income") +
+  theme_minimal()
+
+print(p2)
+```
+
+```{r}
+p3 <- ggplot(data) + geom_boxplot(aes(x = factor(loan_status), y = person_emp_exp), fill = "#90EE90", alpha = 0.6) +
+  theme(axis.title = element_text(size = 8.5)) +
+  labs(title = "Loan Status vs Employment Experience", x = "Loan Status", y = "Employment Experience") +
+  theme_minimal()
+
+print(p3)
+```
+
+```{r}
+p4 <- ggplot(data) + geom_boxplot(aes(x = factor(loan_status), y = loan_amnt), fill = "violet", alpha = 0.6) +
+  theme(axis.title = element_text(size = 8.5)) +
+  labs(title = "Loan Status vs Loan Amount", x = "Loan Status", y = "Loan Amount") +
+  theme_minimal()
+
+print(p4)
+```
+
+```{r}
+p5 <- ggplot(data) + geom_boxplot(aes(x = factor(loan_status), y = loan_percent_income), fill = "#FFDAB9", alpha = 0.6) +
+  theme(axis.title = element_text(size = 8.5)) +
+  labs(title = "Loan Status vs Loan Percent Income", x = "Loan Status", y = "Loan Percent Income") +
+  theme_minimal()
+
+print(p5)
+```
+
+
+```{r}
+p6 <- ggplot(data) + geom_boxplot(aes(x = factor(loan_status), y = cb_person_cred_hist_length), fill = "skyblue", alpha = 0.6) +
+  theme(axis.title = element_text(size = 8.5)) +
+  labs(title = "Loan Status vs Credit History Length", x = "Loan Status", y = "Credit History Length") +
+  theme_minimal()
+
+print(p6)
+```
+
+
+#### Categorical Variables
+
+```{r}
+# Crear gráficos para cada variable categórica:
+p1 <- ggplot(data) +
+  geom_violin(aes(x = person_gender, y = loan_status), fill = "lightblue") +
+  theme(axis.text = element_text(size = 10),
+        axis.title = element_text(size = 8.5)) +
+  labs(title = "Loan Status by Person Gender", x = "Person Gender", y = "Loan Status")
+
+print(p1)
+```
+
+```{r}
+p2 <- ggplot(data) +
+  geom_violin(aes(x = person_education, y = loan_status), fill = "lightpink") +
+  theme(axis.text = element_text(size = 10),
+        axis.title = element_text(size = 8.5)) +
+  labs(title = "Loan Status by Person Education", x = "Person Education", y = "Loan Status")
+
+print(p2)
+```
+
+```{r}
+p3 <- ggplot(data) +
+  geom_violin(aes(x = person_home_ownership, y = loan_status), fill = "lightgreen") +
+  theme(axis.text = element_text(size = 10),
+        axis.title = element_text(size = 8.5)) +
+  labs(title = "Loan Status by Person Home Ownership", x = "Person Home Ownership", y = "Loan Status")
+
+print(p3)
+```
+
+```{r}
+p4 <- ggplot(data) +
+  geom_violin(aes(x = loan_intent, y = loan_status), fill = "lavender") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text = element_text(size = 10),
+        axis.title = element_text(size = 8.5)) +
+  labs(title = "Loan Status by Loan Intent", x = "Loan Intent", y = "Loan Status")
+
+print(p4)
+```
+
+```{r}
+# Barras para la distribución de previous_loan_defaults_on_file
+ggplot(data, aes(x = previous_loan_defaults_on_file)) +
+  geom_bar(fill = "coral1") +
+  labs(
+    title = "Distribución de Previous Loan Defaults",
+    x = "Previous Loan Defaults",
+    y = "Frecuencia"
+  ) +
+  theme_minimal()
+
+p5 <- ggplot(data) +
+  geom_violin(aes(x = previous_loan_defaults_on_file, y = loan_status), fill = "peachpuff") +
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 8.5)) +
+  labs(title = "Loan Status by Previous Loan Defaults", x = "Previous Loan Defaults", y = "Loan Status")
+
+print(p5)
+```
+
+### PreProcessing Data
+
+```{r}
+
+```
 
