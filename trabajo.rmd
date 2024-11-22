@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r Libraries}
 library(ggplot2)
+library(GGally)
 ```
 
 
@@ -61,20 +62,38 @@ summary(data)
 ```
 
 
-
-
 #### Numerical
 
-- person_age: Este dataset abarca personas adultas, por tanto la edad mínima es 20 años. La media está entre los 27.76 años, por tanto la mayor parte de muestras del conjunto está formada por gente joven. Por otro lado, la edad máxima es 144 años, lo cual es un valor atípico. En este caso, hemos considerado que la edad máxima aceptable es 122 años, ya que es la edad más longeva registrada en la historia. 
-Por tanto, eliminaremos las observaciones con edades superiores a 122 años.
-- person_income: Este dataset abarca entre valores anuales de 8.000$ y 7.200.766$. Este máximo podría ser un valor atípico, ya que la media de los ingresos anuales es de 66.072$.
-- person_emp_exp: Esta variable tiene un rango de 0 a 123 años. Este último valor es bastante atípico, además considerando que la edad máxima que hemos aceptado es de 122 años. 
-Igualmente, al eliminar las observaciones con edades superiores a 122 años, también eliminamos las observaciones con años de experiencia laboral superiores a 122 años.
-
+- person_age: Este dataset abarca personas adultas, por tanto la edad mínima es 20 años. La media está entre los 27.76 años, por tanto la mayor parte de muestras del conjunto está formada por gente joven. Por otro lado, la edad máxima es 144 años, lo cual es un valor atípico. En este caso, hemos considerado que la edad máxima aceptable es 122 años, ya que es la edad más longeva registrada en la historia. Por tanto, eliminaremos las observaciones con edades superiores a 122 años.
 
 ```{r}
 data <- subset(data, person_age <= 122)
 
+```
+
+- person_income: Este dataset abarca entre valores anuales de 8.000$ y 7.200.766$. Este máximo podría ser un valor atípico, ya que la media de los ingresos anuales es de 66.072$.
+- person_emp_exp: Esta variable tiene un rango de 0 a 123 años. Este último valor es bastante atípico, además considerando que la edad máxima que hemos aceptado es de 122 años. 
+Igualmente, al eliminar las observaciones con edades superiores a 122 años, también eliminamos las observaciones con años de experiencia laboral superiores a 122 años.
+- loan_amnt: El importe de los préstamos varían entre 500$ y 35.000$. Inicialmente, no parece haber ningún dato atípico
+- loan_int_rate: La tasa del préstamo varía entre el 5.42% y el 20%. Nada preocupante
+- loan_percent_income: Como podemos observar, hay muestras donde el porcentaje del préstamo sobre los ingresos anuales es 0%, algo imposible. Veamos cuantas muestras tienen un 0%
+
+```{r}
+aux <- subset(data, loan_percent_income == 0)
+aux <- subset(aux, person_income > 2000000)
+head(aux)
+```
+
+Vemos que hay 6 muestras con un porcentaje de préstamo sobre los ingresos anuales de 0%. Esto es imposible, ya que si el porcentaje es 0%, el préstamo es 0$. Por tanto, eliminaremos estas observaciones.
+
+- cb_person_cred_hist_length: La longitud del historial crediticio varía entre 2 y 30 años. No parece haber ningún valor atípico.
+- credit_score: La puntuación crediticia varía entre 390 y 850. No parece haber ningún valor atípico.
+
+Veamos como queda el dataset tras eliminar los valores atípicos
+```{r}
+data <- subset(data, person_age <= 122)
+data <- subset(data, loan_percent_income != 0)
+summary(data)
 ```
 
 ```{r}
@@ -87,14 +106,15 @@ numerical_vars <- c('person_age', 'person_income', 'person_emp_exp', 'loan_amnt'
 # Distribuciones de las variables numéricas:
 for (var in numerical_vars) {
   print(
-    ggplot(df, aes_string(x = var)) +
-      geom_histogram(fill = "lightblue", color = "white", bins = 30) + 
-      geom_density(aes(y = ..density.. * length(df[[var]])), color = "red", size = 1) + 
+    ggplot(data, aes_string(x = var)) +
+      geom_histogram(fill = "lightblue", color = "white", bins = 30) +
       labs(title = paste("Distribución de", var), x = var, y = "Frecuencia") +
       theme_minimal()
   )
 }
 ```
+
+Como podemos observar, menos el credit_score, la mayoría de las variables numéricas no siguen una distribución normal y se extienden por la derecha. Esto puede ser un problema para los modelos de regresión, ya que estos asumen que las variables siguen una distribución normal. Por tanto, es posible que tengamos que transformar estas variables para que sigan una distribución normal.
 
 #### Categorical
 
@@ -102,14 +122,38 @@ for (var in numerical_vars) {
 table(data$person_gender)
 table(data$person_education)
 table(data$person_home_ownership)
-table(data$person_loan_intent)
-table(data$person_previous_loan_defaults)
+table(data$loan_intent)
+table(data$previous_loan_defaults_on_file)
 ```
 
 - gender: As we can see, the majority of the applicants are male, however, the difference is not very significant so there isn't much information to be gained from these values.
 - education: The number of applicants with a master's degree is approximately half the number of people in any category, except for those with a doctorate, who are significantly fewer. This variable may be useful in predicting the loan status.
+Esto puede indicarnos que las personas con un nivel educativo más alto son más propensas a solicitar un préstamo.
 - home ownership: The majority of applicants are renters, followed mortgage holders. There are few applicants who own their homes and even fewer who own other types of homes. This variable may also be useful in predicting the loan status.
 - loan intent: The most common loan intents are both education and medical bills, followed by debt consolidation, venture and personal loans. Fewer people take out loans for home improvement. This variable may also be useful in predicting the loan status.
+
+```{r}
+# Miramos la distribución de las variables categóricas:
+cat <- c('person_gender', 'person_education', 'person_home_ownership', 'loan_intent', 'previous_loan_defaults_on_file')
+
+for (var in cat) {
+  print(
+    ggplot(data, aes_string(x = var)) +
+      geom_bar(fill = "skyblue") +
+      labs(title = paste("Distribución de", var), x = var, y = "Frecuencia") +
+      theme_minimal()
+  )
+}
+```
+
+### Data Correlations
+
+#### Numerical Variables
+
+```{r}
+# Aplicamos el ggpairs para ver las relaciones entre las variables numéricas:
+# ggpairs(data)
+```
 
 ### Missing Value Analysis
 
