@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r Libraries}
 library(ggplot2)
 library(GGally)
+library(e1071)
 ```
 
 
@@ -67,11 +68,15 @@ summary(data)
 - person_age: Este dataset abarca personas adultas, por tanto la edad mínima es 20 años. La media está entre los 27.76 años, por tanto la mayor parte de muestras del conjunto está formada por gente joven. Por otro lado, la edad máxima es 144 años, lo cual es un valor atípico. En este caso, hemos considerado que la edad máxima aceptable es 122 años, ya que es la edad más longeva registrada en la historia. Por tanto, eliminaremos las observaciones con edades superiores a 122 años.
 
 ```{r}
-data <- subset(data, person_age <= 122)
-
+data <- subset(data, person_age <= 50)
 ```
 
-- person_income: Este dataset abarca entre valores anuales de 8.000$ y 7.200.766$. Este máximo podría ser un valor atípico, ya que la media de los ingresos anuales es de 66.072$.
+- person_income: Este dataset abarca entre valores anuales de 8.000$ y 7.200.766$. Supondremos que las muestras con ingresos anuales mayores a 500.000$ no tendrían ninguna dificultad para pedir un préstamo con las dimensiones de este dataset
+
+```{r}
+data <- subset(data, person_income < 250000)
+```
+
 - person_emp_exp: Esta variable tiene un rango de 0 a 123 años. Este último valor es bastante atípico, además considerando que la edad máxima que hemos aceptado es de 122 años. 
 Igualmente, al eliminar las observaciones con edades superiores a 122 años, también eliminamos las observaciones con años de experiencia laboral superiores a 122 años.
 - loan_amnt: El importe de los préstamos varían entre 500$ y 35.000$. Inicialmente, no parece haber ningún dato atípico
@@ -84,18 +89,21 @@ aux <- subset(aux, person_income > 2000000)
 head(aux)
 ```
 
-Vemos que hay 6 muestras con un porcentaje de préstamo sobre los ingresos anuales de 0%. Esto es imposible, ya que si el porcentaje es 0%, el préstamo es 0$. Por tanto, eliminaremos estas observaciones.
+Vemos que hay 6 muestras con un porcentaje de préstamo sobre los ingresos anuales de 0%. Esto es imposible, ya que si el porcentaje es 0%, el préstamo es 0$.
+Eliminaremos las muestras que concuerden con estas condiciones.
+
+```{r}
+data <- subset(data, loan_percent_income != 0)
+```
 
 - cb_person_cred_hist_length: La longitud del historial crediticio varía entre 2 y 30 años. No parece haber ningún valor atípico.
 - credit_score: La puntuación crediticia varía entre 390 y 850. No parece haber ningún valor atípico.
 
-Veamos como queda el dataset tras eliminar los valores atípicos
+Veamos como queda el dataset tras eliminar los valores atípicos:
+
 ```{r}
-data <- subset(data, person_age <= 122)
-data <- subset(data, loan_percent_income != 0)
 summary(data)
 ```
-
 ```{r}
 # Lista de variables numéricas
 numeric <- c('person_age', 'person_income', 'person_emp_exp', 'loan_amnt', 
@@ -119,20 +127,6 @@ Como podemos observar, menos el credit_score, la mayoría de las variables numé
 #### Categorical
 
 ```{r}
-table(data$person_gender)
-table(data$person_education)
-table(data$person_home_ownership)
-table(data$loan_intent)
-table(data$previous_loan_defaults_on_file)
-```
-
-- gender: As we can see, the majority of the applicants are male, however, the difference is not very significant so there isn't much information to be gained from these values.
-- education: The number of applicants with a master's degree is approximately half the number of people in any category, except for those with a doctorate, who are significantly fewer. This variable may be useful in predicting the loan status.
-Esto puede indicarnos que las personas con un nivel educativo más alto son más propensas a solicitar un préstamo.
-- home ownership: The majority of applicants are renters, followed mortgage holders. There are few applicants who own their homes and even fewer who own other types of homes. This variable may also be useful in predicting the loan status.
-- loan intent: The most common loan intents are both education and medical bills, followed by debt consolidation, venture and personal loans. Fewer people take out loans for home improvement. This variable may also be useful in predicting the loan status.
-
-```{r}
 # Miramos los datos de las variables categóricas:
 cat <- c('person_gender', 'person_education', 'person_home_ownership', 'loan_intent', 'previous_loan_defaults_on_file')
 
@@ -146,6 +140,12 @@ for (var in cat) {
 }
 ```
 
+- gender: As we can see, the majority of the applicants are male, however, the difference is not very significant so there isn't much information to be gained from these values.
+- education: The number of applicants with a master's degree is approximately half the number of people in any category, except for those with a doctorate, who are significantly fewer. This variable may be useful in predicting the loan status.
+Esto puede indicarnos que las personas con un nivel educativo más alto son más propensas a solicitar un préstamo.
+- home ownership: The majority of applicants are renters, followed mortgage holders. There are few applicants who own their homes and even fewer who own other types of homes. This variable may also be useful in predicting the loan status.
+- loan intent: The most common loan intents are both education and medical bills, followed by debt consolidation, venture and personal loans. Fewer people take out loans for home improvement. This variable may also be useful in predicting the loan status.
+
 ### Data Correlations
 
 #### Numerical Variables
@@ -154,64 +154,33 @@ for (var in cat) {
 # Aplicamos el ggpairs para ver las relaciones entre las variables numéricas:
 # ggpairs(data)
 
-numeric_Corr <- data[, c('person_age', 'person_income', 'person_emp_exp', 'loan_amnt', 'loan_int_rate', 'loan_percent_income', 
-                         'cb_person_cred_hist_length', 'credit_score')]
+numeric_Corr <- data[, c('person_age', 'person_income', 'person_emp_exp',
+                        'loan_amnt', 'loan_int_rate', 'loan_percent_income',
+                        'cb_person_cred_hist_length', 'credit_score')]
 
 ggcorr(numeric_Corr, label = TRUE)
 ```
-Como podemos observar, 'credit_score' y 'loan_int_rate', apenas influyen, ya que sus correlaciones con las otras variables son prácticamente nulas.
-Por tanto procedemos a eliminarlas.
+Como podemos observar, 'credit_score' y 'loan_int_rate', apenas influyen, ya que sus correlaciones con las otras variables son prácticamente nulas, por tanto procedemos a eliminarlas.
+Por otra parte, se observa que 'person_age', 'person_emp_exp' y 'cb_person_cred_hist_length' tienen una correlación muy alta entre ellas, por tanto eliminaremos 'person_emp_exp' y 'cb_person_cred_hist_length' para evitar la multicolinealidad.
 
 ```{r}
 names(data)
 ```
+
 ```{r}
 # Eliminar por posición
-data_Mod <- data[, -c(9, 12)]
+data_Mod <- data[, -c(5, 9, 11, 12)]
 
 # Verificar las columnas restantes
 names(data_Mod)
 ```
-```{r}
-numeric_Corr <- data[, c('person_age', 'person_income', 'person_emp_exp', 'loan_amnt', 'loan_percent_income', 
-                         'cb_person_cred_hist_length')]
 
-ggcorr(numeric_Corr, label = TRUE)
+```{r}
+# Comparar las correlaciones de las variables numéricas restantes:
+ggcorr(data_Mod, label = TRUE, label_round = 2)
 ```
 
 
-
-### Missing Value Analysis
-
-To find missing values in the dataset, we can use the `is.na()` function in R. 
-
-```{r}
-colSums(is.na(data))
-
-
-summary(data$yrs.since.phd)
-summary(data$yrs.service)
-summary(data$salary)
-```
-
-Como podemos ver, en ninguna de las variables hay valores faltantes, lo que nos hace ahorrarnos el paso de tener que tratar estos valores
-
-
-
-```{r}
-# Check for missing values
-sum(is.na(data))
-
-# Visualize the distribution of loan amounts
-hist(data$loan_amnt, main="Distribution of Loan Amounts", xlab="Loan Amount", breaks=50)
-
-# Boxplot of loan amounts by grade
-#boxplot(loan_amnt ~ grade, data=data, main="Loan Amounts by Grade", xlab="Grade", ylab="Loan Amount")
-
-# Correlation matrix
-#cor_matrix <- cor(data[, sapply(data, is.numeric)])
-#corrplot::corrplot(cor_matrix, method="circle")
-```
 
 ### Bivariate Analysis
 
@@ -219,7 +188,7 @@ hist(data$loan_amnt, main="Distribution of Loan Amounts", xlab="Loan Amount", br
 
 ```{r}
 # Creamos los plots para las 6 varaibles restantes: 
-p1 <- ggplot(data) + geom_boxplot(aes(x = factor(loan_status), y = person_age), fill = "violet", alpha = 0.6) +
+p1 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = person_age), fill = "violet", alpha = 0.6) +
   theme(axis.title = element_text(size = 8.5)) +
   labs(title = "Loan Status vs Person Age", x = "Loan Status", y = "Person Age") +
   theme_minimal()
@@ -228,7 +197,7 @@ print(p1)
 ```
 
 ```{r}
-p2 <- ggplot(data) + geom_boxplot(aes(x = factor(loan_status), y = person_income), fill = "#FFB6C1", alpha = 0.6) +
+p2 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = person_income), fill = "#FFB6C1", alpha = 0.6) +
   theme(axis.title = element_text(size = 8.5)) +
   labs(title = "Loan Status vs Person Income", x = "Loan Status", y = "Person Income") +
   theme_minimal()
@@ -237,40 +206,21 @@ print(p2)
 ```
 
 ```{r}
-p3 <- ggplot(data) + geom_boxplot(aes(x = factor(loan_status), y = person_emp_exp), fill = "#90EE90", alpha = 0.6) +
+p3 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_amnt), fill = "violet", alpha = 0.6) +
   theme(axis.title = element_text(size = 8.5)) +
-  labs(title = "Loan Status vs Employment Experience", x = "Loan Status", y = "Employment Experience") +
+  labs(title = "Loan Status vs Loan Amount", x = "Loan Status", y = "Loan Amount") +
   theme_minimal()
 
 print(p3)
 ```
 
 ```{r}
-p4 <- ggplot(data) + geom_boxplot(aes(x = factor(loan_status), y = loan_amnt), fill = "violet", alpha = 0.6) +
-  theme(axis.title = element_text(size = 8.5)) +
-  labs(title = "Loan Status vs Loan Amount", x = "Loan Status", y = "Loan Amount") +
-  theme_minimal()
-
-print(p4)
-```
-
-```{r}
-p5 <- ggplot(data) + geom_boxplot(aes(x = factor(loan_status), y = loan_percent_income), fill = "#FFDAB9", alpha = 0.6) +
+p4 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_percent_income), fill = "#FFDAB9", alpha = 0.6) +
   theme(axis.title = element_text(size = 8.5)) +
   labs(title = "Loan Status vs Loan Percent Income", x = "Loan Status", y = "Loan Percent Income") +
   theme_minimal()
 
-print(p5)
-```
-
-
-```{r}
-p6 <- ggplot(data) + geom_boxplot(aes(x = factor(loan_status), y = cb_person_cred_hist_length), fill = "skyblue", alpha = 0.6) +
-  theme(axis.title = element_text(size = 8.5)) +
-  labs(title = "Loan Status vs Credit History Length", x = "Loan Status", y = "Credit History Length") +
-  theme_minimal()
-
-print(p6)
+print(p4)
 ```
 
 
@@ -278,7 +228,7 @@ print(p6)
 
 ```{r}
 # Crear gráficos para cada variable categórica:
-p1 <- ggplot(data) +
+p1 <- ggplot(data_Mod) +
   geom_violin(aes(x = person_gender, y = loan_status), fill = "lightblue") +
   theme(axis.text = element_text(size = 10),
         axis.title = element_text(size = 8.5)) +
@@ -288,7 +238,7 @@ print(p1)
 ```
 
 ```{r}
-p2 <- ggplot(data) +
+p2 <- ggplot(data_Mod) +
   geom_violin(aes(x = person_education, y = loan_status), fill = "lightpink") +
   theme(axis.text = element_text(size = 10),
         axis.title = element_text(size = 8.5)) +
@@ -298,7 +248,7 @@ print(p2)
 ```
 
 ```{r}
-p3 <- ggplot(data) +
+p3 <- ggplot(data_Mod) +
   geom_violin(aes(x = person_home_ownership, y = loan_status), fill = "lightgreen") +
   theme(axis.text = element_text(size = 10),
         axis.title = element_text(size = 8.5)) +
@@ -308,7 +258,7 @@ print(p3)
 ```
 
 ```{r}
-p4 <- ggplot(data) +
+p4 <- ggplot(data_Mod) +
   geom_violin(aes(x = loan_intent, y = loan_status), fill = "lavender") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.text = element_text(size = 10),
@@ -320,7 +270,7 @@ print(p4)
 
 ```{r}
 # Barras para la distribución de previous_loan_defaults_on_file
-ggplot(data, aes(x = previous_loan_defaults_on_file)) +
+ggplot(data_Mod, aes(x = previous_loan_defaults_on_file)) +
   geom_bar(fill = "coral1") +
   labs(
     title = "Distribución de Previous Loan Defaults",
@@ -329,7 +279,7 @@ ggplot(data, aes(x = previous_loan_defaults_on_file)) +
   ) +
   theme_minimal()
 
-p5 <- ggplot(data) +
+p5 <- ggplot(data_Mod) +
   geom_violin(aes(x = previous_loan_defaults_on_file, y = loan_status), fill = "peachpuff") +
   theme(axis.text = element_text(size = 12),
         axis.title = element_text(size = 8.5)) +
@@ -338,9 +288,104 @@ p5 <- ggplot(data) +
 print(p5)
 ```
 
-### PreProcessing Data
+### Missing Value Analysis
+
+To find missing values in the dataset, we can use the `is.na()` function in R. 
 
 ```{r}
-
+colSums(is.na(data_Mod))
 ```
 
+Como podemos ver, en ninguna de las variables hay valores faltantes, lo que nos hace ahorrarnos el paso de tener que tratar estos valores
+
+### Key Features
+
+A partir de estos violin plots se puede observar una peculiaridad en el atributo previous_loan_defaults_on_file,
+que indica si el solicitante ha tenido préstamos anteriores con impagos. En caso de ser así, el prestamo es siempre rechazado, entonces este atributo es clave para predecir el resultado del préstamo.
+
+Analizando la correlación entre las variables, se observa que tanto el person_income como el loan_amnt y el loan_percent_income tienen una correlación elevada,
+por tanto son también variables importantes a tener en cuenta. 
+
+### PreProcessing Data
+
+#### Checking Normality (Skewness)
+
+```{r}
+skewness(data_Mod$person_age)
+```
+```{r}	
+ggplot(data_Mod, aes(x = data_Mod$person_age)) +
+      geom_histogram(fill = "lightblue", color = "white", bins = 30) +
+      labs(title = paste("Distribución de", n), x = n, y = "Frecuencia") +
+      theme_minimal()
+```
+
+```{r}
+skewness(log(data_Mod$person_age - 19))
+```
+
+Vemos que aplicando esta transformación logarítmica, mejoramos la distribución de la variable 'person_age', 
+ya que la edad mínima de las personas es 20 años, por tanto restamos 19 para evitar el logaritmo de 0.
+
+```{r}
+skewness(data_Mod$person_income)
+```
+```{r}	
+ggplot(data_Mod, aes(x = data_Mod$person_income)) +
+      geom_histogram(fill = "lightblue", color = "white", bins = 30) +
+      labs(title = paste("Distribución de", n), x = n, y = "Frecuencia") +
+      theme_minimal()
+```
+
+```{r}
+skewness(log(data_Mod$person_income))
+```
+
+Vemos que aplicando esta transformación logarítmica, mejoramos la distribución de la variable 'person_income'.
+
+- loan_amnt:
+
+```{r}
+skewness(data_Mod$loan_amnt)
+```
+
+Nos sale una asimetría de 1.17, por tanto tenemos que aplicar otra transformación.
+
+```{r}
+skewness(sqrt(data_Mod$loan_amnt))
+skewness(log(data_Mod$loan_amnt))
+```
+
+Como podemos ver, ambos solucionan el problema de asimetría, pero la transformación con raíz cuadrada es más efectiva.
+
+- loan_percent_income:
+
+```{r}
+skewness(data_Mod$loan_percent_income)
+```
+
+Nos sale una asimetría de 1.03, por tanto, es conveniente aplicar otra transformación.
+
+```{r}
+skewness(sqrt(data_Mod$loan_percent_income))
+skewness(log(data_Mod$loan_percent_income))
+```
+
+Como podemos ver, ambos solucionan el problema de asimetría, pero la transformación con raíz cuadrada es más efectiva.
+
+#### Creation of a better skewed dataset
+
+Con todas las transformaciones realizadas, procedemos a crear un nuevo dataset con las variables transformadas, ya que siguen mejor la distribución normal:
+
+```{r}
+data_Transformed <- data_Mod
+
+data_Transformed$person_age <- log(data_Mod$person_age - 19)
+data_Transformed$person_income <- log(data_Mod$person_income)
+data_Transformed$loan_amnt <- sqrt(data_Mod$loan_amnt)
+data_Transformed$loan_percent_income <- sqrt(data_Mod$loan_percent_income)
+```
+
+## Model Building
+
+### Train-Test Split
