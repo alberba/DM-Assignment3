@@ -44,16 +44,14 @@ As we can see, the dataset contains 45,000 observations and 14 variables. The va
 - **loan_status**: The status of the loan (integer 1 = approved; 0 = rejected)
 
 ```{r}
-# Contar los valores de 'loan_status'
-counts <- table(data$loan_status)
-
 # Crear el gráfico de barras
 ggplot(data, aes(x = factor(loan_status, labels = c("Rechazado", "Aprobado")))) +
   geom_bar(fill = "skyblue") +
-  labs(title = "Distribución del estado de aprobación del préstamo",
-       x = "Estado del Préstamo",
-       y = "Cantidad")
+  labs(title = "Distribution of loan approval status",
+       x = "Loan status",
+       y = "Quantity")
 ```
+Most loans end up getting denied, we aim to understand why that is the case and build a model that predicts the outcome as much as possible.
 
 ### Independent Variables
 
@@ -108,7 +106,7 @@ numeric <- c('person_age', 'person_income', 'person_emp_exp', 'loan_amnt',
 # Distribuciones de las variables numéricas:
 for (n in numeric) {
   print(
-    ggplot(data, aes_string(x = n)) +
+    ggplot(data, aes(x = !!sym(n))) +
       geom_histogram(fill = "lightblue", color = "white", bins = 30) +
       labs(title = paste("Distribución de", n), x = n, y = "Frecuencia") +
       theme_minimal()
