@@ -10,9 +10,17 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r Libraries}
+# Load the required libraries
 library(ggplot2)
 library(GGally)
 library(e1071)
+library(class)
+library(gmodels)
+library(tree)
+library(FSelector)
+library(partykit)
+library(party)
+library(RWeka)
 ```
 
 
@@ -388,4 +396,154 @@ data_Transformed$loan_percent_income <- sqrt(data_Mod$loan_percent_income)
 
 ## Model Building
 
+### Ordenar las variables
+
+```{r}
+# Identificar las columnas numéricas y de tipo factor
+numeric_columns <- sapply(data_Transformed, is.numeric)
+factor_columns <- sapply(data_Transformed, is.factor)
+
+# Excluir la variable objetivo de las columnas numéricas y de tipo factor
+numeric_columns <- numeric_columns & names(data_Transformed) != "loan_status"
+
+# Ordenar las columnas: primero las numéricas, luego las de tipo factor, y finalmente la variable objetivo
+ordered_columns <- c(names(data_Transformed)[numeric_columns], 
+                     names(data_Transformed)[factor_columns], 
+                     "loan_status")
+
+# Reordenar el data frame
+data_Transformed <- data_Transformed[, ordered_columns]
+```
+
+### Data Normalization
+
+```{r}
+## create normalization function
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+
+# Identificar las columnas numéricas
+numerical_columns <- sapply(data_Transformed, is.numeric)
+
+# Aplicar una transformación (por ejemplo, normalización) solo a las columnas numéricas
+data_Normalized <- data_Transformed
+## normalize the iris numerical data
+data_Normalized[, numerical_columns] <- as.data.frame(lapply(data_Transformed[, numerical_columns], normalize))
+## confirm that normalization worked
+summary(data_Normalized)
+```
+
 ### Train-Test Split
+
+```{r}
+# Convertir las variables categóricas en variables dummy
+data_Normalized <- model.matrix(~ . - 1, data = data_Normalized)
+
+# Convertir el resultado a un data frame
+data_Normalized <- as.data.frame(data_Normalized)
+```
+
+```{r}
+## To reproduce the calculations
+seeds <- c(1357, 2468, 3579, 4680, 5791)
+set.seed(seeds[1])
+
+## Create an index to partition the data set
+ind <- sample(2, nrow(data_Normalized), replace=TRUE, prob=c(0.80, 0.20))
+
+data_Normalized.train <- data_Normalized[ind==1,]
+data_Normalized.test <- data_Normalized[ind==2,]
+```
+
+Veamos que se hayan hecho bien las particiones
+
+```{r}
+nrow(data_Normalized)
+nrow(data_Normalized.train)
+nrow(data_Normalized.test)
+```
+
+## Classification using Nearest Neighbors
+
+### Predictions
+
+```{r}
+## Build the classifier
+data_Normalized.knn <- knn(data_Normalized.train[, 1:19], data_Normalized.test[, 1:19], cl = data_Normalized.train[, 20], k = 3)
+```
+
+```{r}
+CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn, prop.chisq=FALSE)
+```
+
+Desde la tabla podemos ver que el modelo en lineas generales es preciso, con un margen de error del 0.135 (precisión del 86.5%). Por otro lado, si nos fijamos
+en la columna de aceptados, la precisión es del 0.658, un valor bastante bajo. Esto quiere decir que este modelo puede ser mas propenso a rechazar préstamos a esas muestras donde debería aceptarlos.
+
+Probaremos solo utilizando las variables numéricas a ver como se comporta el modelo.
+
+```{r}
+## Build the classifier
+data_Normalized.knn2 <- knn(data_Normalized.train[, 1:4], data_Normalized.test[, 1:4], cl = data_Normalized.train[, 20], k = 3)
+CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn2, prop.chisq=FALSE)
+```
+
+Como se puede ver, el modelo es menos preciso, lo que tiene sentido ya que las variables categóricas también influyen en la decisión de si se aprueba o no un préstamo.
+
+Ahora probaremos esta vez con 2 ks diferentes, 5 y 2.
+
+```{r}
+## Build the classifier
+data_Normalized.knn3 <- knn(data_Normalized.train[, 1:19], data_Normalized.test[, 1:19], cl = data_Normalized.train[, 20], k = 2)
+data_Normalized.knn4 <- knn(data_Normalized.train[, 1:19], data_Normalized.test[, 1:19], cl = data_Normalized.train[, 20], k = 5)
+CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn3, prop.chisq=FALSE)
+CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn4, prop.chisq=FALSE)
+```
+
+## Classification using Naive Bayes
+
+```{r}
+classifier.NB <- naiveBayes(x = data_Normalized.train[, 1:19], y = data_Normalized.train[, 20])
+data_Normalized.NB <- predict(classifier.NB, data_Normalized.test[, 1:19])
+
+CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.NB, prop.chisq=FALSE)
+```
+
+## Classification using Decision Trees
+
+### ID3 Algorithm
+
+```{r}
+## Create an index to partition the data set
+ind <- sample(2, nrow(data_Mod), replace=TRUE, prob=c(0.80, 0.20))
+
+data_Mod.train <- data_Mod[ind==1,]
+data_Mod.test <- data_Mod[ind==2,]
+```
+
+```{r}
+# Crear el modelo, con todas las variables
+ID3 <- J48(loan_status ~ person_age, data = data_Mod.train)
+plot(ID3)
+```
+
+```{r}
+tree(Species ~ Sepal.Width + Petal.Width, data = iris)
+data_Transformed.tree <- tree(Species ~ Sepal.Width + Petal.Width, data = iris)
+```
+
+### C5.0 Algorithm
+
+```{r}
+library(C50)
+```
+
+```{r}
+classifier.C50 <- C5.0(iris.train[,1:4], iris.train[,5])
+classifier.C50
+```
+
+
+
+
+
