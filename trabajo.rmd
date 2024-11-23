@@ -511,21 +511,129 @@ CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.NB, prop.ch
 
 ## Classification using Decision Trees
 
+Para poder hacer uso de los árboles de decisión, necesitamos convertir las variables númericas en categóricas.
+
+### Conversion of Numerical Variables 
+
+```{r}
+library(ggplot2)
+
+# Identificar las variables numéricas automáticamente
+numeric_vars <- names(data_Mod)[sapply(data_Mod, is.numeric)]
+
+# Crear un gráfico para cada variable numérica
+for (var in numeric_vars) {
+  p <- ggplot(data_Mod, aes_string(x = var)) +
+    geom_histogram(fill = "lightblue", color = "black", bins = 30) + # Histograma para variables numéricas
+    labs(title = paste("Distribución de", var), x = var, y = "Frecuencia") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotar etiquetas si es necesario
+  print(p) # Mostrar el gráfico
+}
+
+```
+
+
+```{r}
+## Convertir las variables numéricas en categóricas, divididas en intervalos:
+data_Mod$person_age <- cut(data$person_age, breaks = c(20, 25, 30, 40, 50), labels = c("20-25", "26-30", "31-40", "41-50"))
+data_Mod$person_income <- cut(data$person_income, breaks = c(0, 50000, 100000, 150000, 200000, 250000), labels = c("0-50k", "50k-100k", "100k-150k", "150k-200k", "200k-250k"))
+data_Mod$loan_amnt <- cut(data$loan_amnt, breaks = c(0, 5000, 10000, 20000, 35000), labels = c("0-5k", "5k-10k", "10k-20k", "20k-35k"))
+data_Mod$loan_percent_income <- cut(data$loan_percent_income, breaks = c(0, 0.1, 0.2, 0.3, 0.4, 0.5), labels = c("0-0.1", "0.1-0.2", "0.2-0.3", "0.3-0.4", "0.4,0.5"))
+
+#Hacemos lo mismo con la variable objetivo:
+data_Mod$loan_status <- as.factor(data_Mod$loan_status)
+```
+
 ### ID3 Algorithm
 
 ```{r}
 ## Create an index to partition the data set
-ind <- sample(2, nrow(data_Mod), replace=TRUE, prob=c(0.80, 0.20))
+ind1 <- sample(2, nrow(data_Mod), replace = TRUE, prob = c(0.80, 0.20))
+data_Mod.train1 <- data_Mod[ind1 == 1, ]
+data_Mod.test1 <- data_Mod[ind1 == 2, ]
 
-data_Mod.train <- data_Mod[ind==1,]
-data_Mod.test <- data_Mod[ind==2,]
+# Crear el modelo
+ID3_1 <- J48(loan_status ~ person_age + person_income + loan_amnt + loan_percent_income, data = data_Mod.train1)
+plot(ID3_1)
+```
+
+Como podemos observar nos hemos pasado creando categorías, provocando que se dividan los datos de forma excesiva y puede llevar a producir overfitting.
+Por tanto, vamos a reducir el número de intervalos, para mejorar eso.
+
+```{r}
+data_Mod$person_age <- cut(data$person_age, 
+                           breaks = c(20, 25, 30, 40, 50), 
+                           labels = c("20-25", "26-30", "31-40", "41-50"))
+
+data_Mod$person_income <- cut(data$person_income, 
+                              breaks = c(0, 50000, 100000, 250000), 
+                              labels = c("0-50k", "50k-100k", "+100k"))
+
+data_Mod$loan_amnt <- cut(data$loan_amnt, 
+                          breaks = c(0, 10000, 20000, 35000), 
+                          labels = c("0-10k", "10k-20k", "+20k"))
+
+data_Mod$loan_percent_income <- cut(data$loan_percent_income, 
+                                    breaks = c(0, 0.1, 0.2, 0.5), 
+                                    labels = c("0-0.1", "0.1-0.2", "+0.2"))
+```
+
+Para definir esto nuevos intervalos nos hemos centrado en los rangos donde había una mayor concentración de los datos.
+
+```{r}
+## Create an index to partition the data set
+ind2 <- sample(2, nrow(data_Mod), replace = TRUE, prob = c(0.80, 0.20))
+data_Mod.train2 <- data_Mod[ind2 == 1, ]
+data_Mod.test2 <- data_Mod[ind2 == 2, ]
+
+# Crear el modelo
+ID3_2 <- J48(loan_status ~ person_age + person_income + loan_amnt + loan_percent_income, data = data_Mod.train2)
+plot(ID3_2)
 ```
 
 ```{r}
-# Crear el modelo, con todas las variables
-ID3 <- J48(loan_status ~ person_age, data = data_Mod.train)
-plot(ID3)
+summary(ID3_1)
 ```
+```{r}
+summary(ID3_2)
+```
+
+Ahora añadiremos el resto de variables categóricas, basándonos en el segundo modelo, con intervalos más óptimos:
+
+
+```{r}
+# Crear el modelo
+ID3_3 <- J48(loan_status ~ ., data = data_Mod.train2)
+plot(ID3_3)
+```
+```{r}
+names(data_Mod)
+```
+
+```{r}
+info_gain <- information.gain(loan_status ~ ., data = data_Mod)
+print(info_gain)
+```
+Generamos un nuevo árbol solo con las variables que realmente tienen importancia
+
+```{r}
+# Crear modelo con las variables seleccionadas
+ID3_Sel <- J48(loan_status ~ previous_loan_defaults_on_file + loan_percent_income + person_home_ownership + person_income + loan_amnt, 
+               data = data_Mod.train2)
+plot(ID3_Sel)
+```
+```{r}
+summary(ID3_Sel)
+```
+
+Como vemos ha habido mejora, etc etc, comentar los results, imagino que el grafico se puede mejorar para que se vea mejor con las cosas más pequeñas
+o la letra más pequeña o algo del estilo.
+
+
+
+
+
 
 ```{r}
 tree(Species ~ Sepal.Width + Petal.Width, data = iris)
