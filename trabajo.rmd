@@ -21,6 +21,7 @@ library(FSelector)
 library(partykit)
 library(party)
 library(RWeka)
+library(caret)
 ```
 
 
@@ -500,6 +501,8 @@ CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn3, prop.
 CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn4, prop.chisq=FALSE)
 ```
 
+En ambos nuevos modelos no vemos mejorías sustanciales como para cambiar el modelo original, además de que el modelo original es el que menos tiempo tarda en ejecutarse.
+
 ## Classification using Naive Bayes
 
 ```{r}
@@ -507,7 +510,12 @@ classifier.NB <- naiveBayes(x = data_Normalized.train[, 1:19], y = data_Normaliz
 data_Normalized.NB <- predict(classifier.NB, data_Normalized.test[, 1:19])
 
 CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.NB, prop.chisq=FALSE)
+accuracyNB <- sum(data_Normalized.NB == data_Normalized.test$loan_status) / nrow(data_Normalized.test)
 ```
+
+In the case of the Naive Bayes model, we can see that the accuracy is around 10% lower than the KNN model, which is not a great result.
+It should also be noted that, as we can see in the table, the model takes a more conservative approach when it comes to evaluating loan profiles, therefore it is less likely to approve the loan request.
+Because of this, this model may be prefered to KNN in this case, as the bank .ay prefer taking a safer approach by rejecting more requests even though they should be valid rather than accepting more that shouldn't be valid
 
 ## Classification using Decision Trees
 
@@ -595,8 +603,20 @@ plot(ID3_2)
 ```{r}
 summary(ID3_1)
 ```
+
+Veamos como se comporta con el conjunto test
+
+```{r}
+data_Mod.ID31 <- predict(ID3_1, data_Mod.test1)
+confusionMatrix(data_Mod.ID31, data_Mod.test1$loan_status)
+```
+
+Como vemos tenemos un accuracy del 80.6%, lo cual no está mal, pero podemos mejorar.
+
 ```{r}
 summary(ID3_2)
+data_Mod.ID32 <- predict(ID3_2, data_Mod.test2)
+confusionMatrix(data_Mod.ID32, data_Mod.test2$loan_status)
 ```
 
 Ahora añadiremos el resto de variables categóricas, basándonos en el segundo modelo, con intervalos más óptimos:
@@ -605,40 +625,31 @@ Ahora añadiremos el resto de variables categóricas, basándonos en el segundo 
 ```{r}
 # Crear el modelo
 ID3_3 <- J48(loan_status ~ ., data = data_Mod.train2)
-plot(ID3_3)
+
+data_Mod.ID33 <- predict(ID3_3, data_Mod.test2)
+confusionMatrix(data_Mod.ID33, data_Mod.test2$loan_status)
 ```
-```{r}
-names(data_Mod)
-```
+
+Como hemos podido ver, el modelo ha mejorado, pero creemos que se puede optimiza el modelo. Por tanto, vamos a ver que variables son las más importantes poder optimizar el modelo sin perjudicar la precisión.
 
 ```{r}
 info_gain <- information.gain(loan_status ~ ., data = data_Mod)
 print(info_gain)
 ```
+
 Generamos un nuevo árbol solo con las variables que realmente tienen importancia
 
 ```{r}
 # Crear modelo con las variables seleccionadas
-ID3_Sel <- J48(loan_status ~ previous_loan_defaults_on_file + loan_percent_income + person_home_ownership + person_income + loan_amnt, 
+ID3_Sel <- J48(loan_status ~ previous_loan_defaults_on_file + loan_percent_income + person_home_ownership + person_income + loan_amnt + loan_intent, 
                data = data_Mod.train2)
-plot(ID3_Sel)
+
+data_Mod.ID3Sel <- predict(ID3_Sel, data_Mod.test2)
+confusionMatrix(data_Mod.ID3Sel, data_Mod.test2$loan_status)
 ```
-```{r}
-summary(ID3_Sel)
-```
 
-Como vemos ha habido mejora, etc etc, comentar los results, imagino que el grafico se puede mejorar para que se vea mejor con las cosas más pequeñas
-o la letra más pequeña o algo del estilo.
+Como podemos observar, el modelo es más óptimo y la precisión se ha mantenido en un 87%, lo cual es un buen resultado.
 
-
-
-
-
-
-```{r}
-tree(Species ~ Sepal.Width + Petal.Width, data = iris)
-data_Transformed.tree <- tree(Species ~ Sepal.Width + Petal.Width, data = iris)
-```
 
 ### C5.0 Algorithm
 
@@ -647,10 +658,12 @@ library(C50)
 ```
 
 ```{r}
-classifier.C50 <- C5.0(iris.train[,1:4], iris.train[,5])
-classifier.C50
+C50 <- C5.0(loan_status ~ ., data = data_Mod.train2)
+data_Mod.C50 <- predict(C50, data_Mod.test2)
+confusionMatrix(data_Mod.C50, data_Mod.test2$loan_status)
 ```
 
+No observamos ninguna diferencia con los resultados obtenidos con el ID3, por tanto, no hay ninguna mejora.
 
 
 
