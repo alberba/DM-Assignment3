@@ -9,45 +9,54 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r Libraries}
-# Load the required libraries
-library(ggplot2)
-library(GGally)
-library(e1071)
-library(class)
-library(gmodels)
-library(tree)
-library(FSelector)
-library(partykit)
-library(party)
-library(RWeka)
-library(caret)
+```{r Libraries, include=FALSE}
+# Load the required libraries, without showing warning messages
+suppressWarnings({
+  suppressPackageStartupMessages({
+    library(ggplot2)
+    library(GGally)
+    library(e1071)
+    library(class)
+    library(gmodels)
+    library(tree)
+    library(FSelector)
+    library(partykit)
+    library(party)
+    library(RWeka)
+    library(caret)
+    library(C50)
+    library(rpart.plot)
+    library(MLmetrics)
+  })
+})
 ```
 
+## The Data
 
 ```{r}
 data <- read.csv("./loan_data.csv", header=TRUE, stringsAsFactors=TRUE)
 str(data)
 ```
 
+### Independent Variables
+
 As we can see, the dataset contains 45,000 observations and 14 variables. The variables are as follows:
 
-1. person age: Age of the person (numeric)
-2. person gender: Gender of the person (categorical: female, male)
-3. person education: Highest education level (categorical: Associate, Bachelor, Doctorate, High School, Master)
-4. person income: Annual income (numeric)
-5. person emp exp: Years of employment experience (integer)
-6. person home ownership: Home ownership status (categorical: MORTGAGE, OTHER, OWN, RENT)
-7. loan amnt: Loan amount requested (numeric)
-8. loan intent: Purpose of the loan (categorical: DEBTCONSOLIDATION, EDUCATION, HOME-IMPROVEMENT, MEDICAL, PERSONAL, VENTURE)
-9. loan int rate: Loan interest rate (numeric)
-10. loan percent income: Loan amount as a percentage of annual income (numeric)
-11. cb person cred hist length: Length of credit history in years (numeric)
-12. credit score: Credit score of the person (integer)
-13. previous loan defaults on file: Indicator of previous loan defaults (categorical: No, Yes)
-
-
-## The Data
+1. **person age:** Age of the person (numeric)
+2. **person gender:** Gender of the person (categorical: female, male)
+3. **person education:** Highest education level (categorical: Associate, Bachelor, Doctorate, High School, 
+Master)
+4. **person income:** Annual income (numeric)
+5. **person emp exp:** Years of employment experience (integer)
+6. **person home ownership:** Home ownership status (categorical: MORTGAGE, OTHER, OWN, RENT)
+7. **loan amnt:** Loan amount requested (numeric)
+8. **loan intent:** Purpose of the loan (categorical: DEBTCONSOLIDATION, EDUCATION, HOME-IMPROVEMENT, 
+MEDICAL, PERSONAL, VENTURE)
+9. **loan int rate:** Loan interest rate (numeric)
+10. **loan percent income:** Loan amount as a percentage of annual income (numeric)
+11. **cb person cred hist length:** Length of credit history in years (numeric)
+12. **credit score:** Credit score of the person (integer)
+13. **previous loan defaults on file:** Indicator of previous loan defaults (categorical: No, Yes)
 
 ### Target Variable
 
@@ -62,142 +71,166 @@ ggplot(data, aes(x = factor(loan_status, labels = c("Rechazado", "Aprobado")))) 
        y = "Quantity")
 ```
 
-Most loans end up getting denied, we aim to understand why that is the case and build a model that predicts the outcome as much as possible.
+Most loans end up getting denied, we aim to understand why that is the case and build a model that predicts 
+the outcome as much as possible.
 
-### Independent Variables
+### Summary of the Data
 
-Antes de comenzar con el entrenamiento, es importante analizar cada una de las variables independientes para entender sus valores, su distribución y relación con la variable objetivo.
+Before start training the model, it is important to analyze each of the independent variables to understand
+their values, distribution, and relationship with the target variable.
 
 ```{r}
 summary(data)
 ```
 
+#### Numerical Variables
 
-#### Numerical
-
-- person_age: Este dataset abarca personas adultas, por tanto la edad mínima es 20 años. La media está entre los 27.76 años, por tanto la mayor parte de muestras del conjunto está formada por gente joven. Por otro lado, la edad máxima es 144 años, lo cual es un valor atípico. En este caso, hemos considerado que la edad máxima aceptable es 122 años, ya que es la edad más longeva registrada en la historia. Por tanto, eliminaremos las observaciones con edades superiores a 122 años.
+- **person_age:** This dataset includes adults, so the minimum age is 20 years. The mean is 27.76 years, 
+meaning most of the samples in the dataset are from young people. On the other hand, we can see that 
+there are very few samples for people over 50 years old. Therefore, we will remove observations with 
+ages above 50 as we consider them outliers.
 
 ```{r}
 data <- subset(data, person_age <= 50)
 ```
 
-- person_income: Este dataset abarca entre valores anuales de 8.000$ y 7.200.766$. Supondremos que las muestras con ingresos anuales mayores a 500.000$ no tendrían ninguna dificultad para pedir un préstamo con las dimensiones de este dataset
+- **person_income:** This dataset ranges from annual values of $8,000 to $7,200,766. We will assume 
+that samples with annual incomes above $250,000 would not face any difficulty obtaining a loan within 
+the scope of this dataset.
 
 ```{r}
 data <- subset(data, person_income < 250000)
 ```
 
-- person_emp_exp: Esta variable tiene un rango de 0 a 123 años. Este último valor es bastante atípico, además considerando que la edad máxima que hemos aceptado es de 122 años. 
-Igualmente, al eliminar las observaciones con edades superiores a 122 años, también eliminamos las observaciones con años de experiencia laboral superiores a 122 años.
-- loan_amnt: El importe de los préstamos varían entre 500$ y 35.000$. Inicialmente, no parece haber ningún dato atípico
-- loan_int_rate: La tasa del préstamo varía entre el 5.42% y el 20%. Nada preocupante
-- loan_percent_income: Como podemos observar, hay muestras donde el porcentaje del préstamo sobre los ingresos anuales es 0%, algo imposible. Veamos cuantas muestras tienen un 0%
+- **person_emp_exp:** This variable ranges from 0 to 123 years. The latter is quite an outlier, especially 
+considering that the maximum accepted age is 50 years. Similarly, by removing observations with ages above 
+50 years, we also eliminate observations with more than 50 years of work experience.
+
+- **loan_amnt**: The loan amounts range from $500 to $35,000, with no apparent outliers at first glance.
+
+- **loan_int_rate**: The loan interest rate ranges from 5.42% to 20%. It is likely that as the interest rate
+ increases, the probability of the loan being approved also increases, since the bank would be taking on
+ greater risk but could achieve higher profit.
+ 
+- **loan_percent_income**: As we can see, there are samples where the loan percentage over annual income is 
+0%, which is impossible. So, we will check how many samples meet this condition.
+
 
 ```{r}
 aux <- subset(data, loan_percent_income == 0)
-aux <- subset(aux, person_income > 2000000)
 head(aux)
 ```
 
-Vemos que hay 6 muestras con un porcentaje de préstamo sobre los ingresos anuales de 0%. Esto es imposible, ya que si el porcentaje es 0%, el préstamo es 0$.
-Eliminaremos las muestras que concuerden con estas condiciones.
+We see that there are 3 samples with a loan percentage over annual income of 0%. This is impossible because 
+if the percentage is 0%, the loan amount would be $0. Therefore, we will proceed to remove them.
 
 ```{r}
 data <- subset(data, loan_percent_income != 0)
 ```
 
-- cb_person_cred_hist_length: La longitud del historial crediticio varía entre 2 y 30 años. No parece haber ningún valor atípico.
-- credit_score: La puntuación crediticia varía entre 390 y 850. No parece haber ningún valor atípico.
+- **cb_person_cred_hist_length**: The length of credit history ranges from 2 to 30 years. There don't seem 
+to be any outliers.
 
-Veamos como queda el dataset tras eliminar los valores atípicos:
+- **credit_score**: The credit score ranges from 390 to 850. There don't seem to be any outliers.
+
+Let's see how the dataset looks after removing the outliers:
 
 ```{r}
 summary(data)
 ```
 ```{r}
-# Lista de variables numéricas
+# List of numerical variables:
 numeric <- c('person_age', 'person_income', 'person_emp_exp', 'loan_amnt', 
                     'loan_int_rate', 'loan_percent_income', 
                     'cb_person_cred_hist_length', 'credit_score')
 
 
-# Distribuciones de las variables numéricas:
+# Plot the distribution of each numerical variable:
 for (n in numeric) {
   print(
     ggplot(data, aes(x = !!sym(n))) +
       geom_histogram(fill = "lightblue", color = "white", bins = 30) +
-      labs(title = paste("Distribución de", n), x = n, y = "Frecuencia") +
+      labs(title = paste("Distribution of", n), x = n, y = "Frecuency") +
       theme_minimal()
   )
 }
 ```
 
-Como podemos observar, menos el credit_score, la mayoría de las variables numéricas no siguen una distribución normal y se extienden por la derecha. Esto puede ser un problema para los modelos de regresión, ya que estos asumen que las variables siguen una distribución normal. Por tanto, es posible que tengamos que transformar estas variables para que sigan una distribución normal.
+As we can see, except for the credit_score, most of the numerical variables do not follow a normal 
+distribution and are right-skewed. Later, we'll modify the values to make them follow a normal distribution.
 
 #### Categorical
 
 ```{r}
-# Miramos los datos de las variables categóricas:
-cat <- c('person_gender', 'person_education', 'person_home_ownership', 'loan_intent', 'previous_loan_defaults_on_file')
+# List of categorical variables:
+categories <- c('person_gender', 'person_education', 'person_home_ownership', 'loan_intent', 'previous_loan_defaults_on_file')
 
-for (var in cat) {
+for (var in categories) {
   print(
     ggplot(data, aes_string(x = var)) +
       geom_bar(fill = "coral1") +
-      labs(title = paste("Distribución de", var), x = var, y = "Frecuencia") +
+      labs(title = paste("Distribution of", var), x = var, y = "Frecuency") +
       theme_minimal()
   )
 }
 ```
 
-- gender: As we can see, the majority of the applicants are male, however, the difference is not very significant so there isn't much information to be gained from these values.
-- education: The number of applicants with a master's degree is approximately half the number of people in any category, except for those with a doctorate, who are significantly fewer. This variable may be useful in predicting the loan status.
-Esto puede indicarnos que las personas con un nivel educativo más alto son más propensas a solicitar un préstamo.
-- home ownership: The majority of applicants are renters, followed mortgage holders. There are few applicants who own their homes and even fewer who own other types of homes. This variable may also be useful in predicting the loan status.
-- loan intent: The most common loan intents are both education and medical bills, followed by debt consolidation, venture and personal loans. Fewer people take out loans for home improvement. This variable may also be useful in predicting the loan status.
+- **gender:** As we can see, the majority of the applicants are male, however, the difference is not very
+significant so there isn't much information to be gained from these values.
+
+- **education:** The number of applicants with a master's degree is approximately half the number of people 
+in any category, except for those with a doctorate, who are significantly fewer than that. This variable may 
+be useful in predicting the loan status.
+It can be observed that people who have a higher level of education are more.prone to apply for loans than
+those with a lower level of education..
+
+- **home ownership:** The majority of applicants are renters, followed by mortgage holders. There are few 
+applicants who own their homes and even fewer who own other types of homes. This variable may also be useful 
+in predicting the loan status.
+
+- **loan intent:** The most common loan intents are both education and medical bills, followed by debt
+consolidation, venture and personal loans. Fewer people take out loans for home improvement.
+This variable may also be useful in predicting the loan status.
 
 ### Data Correlations
 
 #### Numerical Variables
 
 ```{r}
-# Aplicamos el ggpairs para ver las relaciones entre las variables numéricas:
-# ggpairs(data)
-
 numeric_Corr <- data[, c('person_age', 'person_income', 'person_emp_exp',
                         'loan_amnt', 'loan_int_rate', 'loan_percent_income',
-                        'cb_person_cred_hist_length', 'credit_score')]
+                        'cb_person_cred_hist_length', 'credit_score', 'loan_status')]
 
 ggcorr(numeric_Corr, label = TRUE)
 ```
-Como podemos observar, 'credit_score' y 'loan_int_rate', apenas influyen, ya que sus correlaciones con las otras variables son prácticamente nulas, por tanto procedemos a eliminarlas.
-Por otra parte, se observa que 'person_age', 'person_emp_exp' y 'cb_person_cred_hist_length' tienen una correlación muy alta entre ellas, por tanto eliminaremos 'person_emp_exp' y 'cb_person_cred_hist_length' para evitar la multicolinealidad.
+As we can see, 'credit_score' has little influence, as its correlations with the other variables are 
+virtually null, and it has no correlation with the target variable. Therefore, we will proceed to remove it. 
+On the other hand, 'person_age', 'person_emp_exp', and 'cb_person_cred_hist_length' have a very high 
+correlation with each other, so we will remove 'person_emp_exp' and 'cb_person_cred_hist_length' to avoid 
+multicollinearity.
 
 ```{r}
-names(data)
-```
+# Supression of the variables
+data_Mod <- data[, -c(5, 11, 12)]
 
-```{r}
-# Eliminar por posición
-data_Mod <- data[, -c(5, 9, 11, 12)]
-
-# Verificar las columnas restantes
+# Verify the changes
 names(data_Mod)
 ```
 
 ```{r}
-# Comparar las correlaciones de las variables numéricas restantes:
+# Compare the correlation matrix of the new dataset:
 ggcorr(data_Mod, label = TRUE, label_round = 2)
 ```
 
-
-
+Now we can see that all the correlations are appropriate, so we can proceed to the next stage.
+ 
 ### Bivariate Analysis
 
 #### Numeric Variables
 
-```{r}
-# Creamos los plots para las 6 varaibles restantes: 
+Comparing the loan status with the all numerical variables to see if there is any relationship between them.
+
+```{r} 
 p1 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = person_age), fill = "violet", alpha = 0.6) +
   theme(axis.title = element_text(size = 8.5)) +
   labs(title = "Loan Status vs Person Age", x = "Loan Status", y = "Person Age") +
@@ -205,6 +238,9 @@ p1 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = person_ag
 
 print(p1)
 ```
+
+As we can saw earlier and we can confirm with this graph, the age of the person does not seem to have a 
+significant impact on the loan status, as the median age is very similar for both approved and rejected loans.
 
 ```{r}
 p2 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = person_income), fill = "#FFB6C1", alpha = 0.6) +
@@ -215,6 +251,11 @@ p2 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = person_in
 print(p2)
 ```
 
+Loan approval is inversly proportional to the applicant's income, higher incomes tend to have their loans 
+rejected. This information doesn't seem to make much sense to us, as you would think that loans taken by
+people with higher income should be both safer and more profitable, however that is not the case here.
+
+
 ```{r}
 p3 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_amnt), fill = "violet", alpha = 0.6) +
   theme(axis.title = element_text(size = 8.5)) +
@@ -223,6 +264,9 @@ p3 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_amnt
 
 print(p3)
 ```
+
+As we can see, those who have their loans approved tend to request higher loan amounts, that is, the higher 
+the loan amount, the more likely it is to be approved. This makes sense as the bank would make more profit.
 
 ```{r}
 p4 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_percent_income), fill = "#FFDAB9", alpha = 0.6) +
@@ -233,11 +277,25 @@ p4 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_perc
 print(p4)
 ```
 
+In this case, those who have a higher loan percentage over annual income are more likely to have their
+loans approved. This is probably because the bank makes more profit from these loans with more interest rate, 
+even though they are riskier than those with a lower percentage.
+
+```{r}
+p5 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_int_rate), fill = "#FFDAB9", alpha = 0.6) +
+  theme(axis.title = element_text(size = 8.5)) +
+  labs(title = "Loan Status vs Loan Int Rate", x = "Loan Status", y = "Loan Int Rate") +
+  theme_minimal()
+
+print(p5)
+```
+
 
 #### Categorical Variables
 
+Comparing the loan status with the all categorical variables to see if there is any relationship between them.
+
 ```{r}
-# Crear gráficos para cada variable categórica:
 p1 <- ggplot(data_Mod) +
   geom_violin(aes(x = person_gender, y = loan_status), fill = "lightblue") +
   theme(axis.text = element_text(size = 10),
@@ -279,16 +337,6 @@ print(p4)
 ```
 
 ```{r}
-# Barras para la distribución de previous_loan_defaults_on_file
-ggplot(data_Mod, aes(x = previous_loan_defaults_on_file)) +
-  geom_bar(fill = "coral1") +
-  labs(
-    title = "Distribución de Previous Loan Defaults",
-    x = "Previous Loan Defaults",
-    y = "Frecuencia"
-  ) +
-  theme_minimal()
-
 p5 <- ggplot(data_Mod) +
   geom_violin(aes(x = previous_loan_defaults_on_file, y = loan_status), fill = "peachpuff") +
   theme(axis.text = element_text(size = 12),
@@ -298,6 +346,11 @@ p5 <- ggplot(data_Mod) +
 print(p5)
 ```
 
+It can be seen that the variable 'previous_loan_defaults_on_file' is key to predicting the loan status, as
+applicants who have had previous loan defaults are always rejected. On the other hand, the rest of the
+attributes do not seem to have a significant impact on the loan status (at least not easily seen via this
+plots) regardless of their value, as all of their profiles are accepted around 25% of the times.
+
 ### Missing Value Analysis
 
 To find missing values in the dataset, we can use the `is.na()` function in R. 
@@ -306,52 +359,53 @@ To find missing values in the dataset, we can use the `is.na()` function in R.
 colSums(is.na(data_Mod))
 ```
 
-Como podemos ver, en ninguna de las variables hay valores faltantes, lo que nos hace ahorrarnos el paso de tener que tratar estos valores
+As we can see, there are no missing values in the dataset, so we can proceed to the next stage.
 
 ### Key Features
 
-A partir de estos violin plots se puede observar una peculiaridad en el atributo previous_loan_defaults_on_file,
-que indica si el solicitante ha tenido préstamos anteriores con impagos. En caso de ser así, el prestamo es siempre rechazado, entonces este atributo es clave para predecir el resultado del préstamo.
+As we have already seen with the vioin plots, the 'previous_loan_defaults_on_file' variable is key to
+predicting the loan status, as applicants who have had previous loan defaults are always rejected.
 
-Analizando la correlación entre las variables, se observa que tanto el person_income como el loan_amnt y el loan_percent_income tienen una correlación elevada,
-por tanto son también variables importantes a tener en cuenta. 
+Analyzing the correlation between the variables, it is observed that both person_income and loan_amnt,
+loan_int_rate, and loan_percent_income have a high correlation, therefore they are also important
+variables to consider.
 
 ### PreProcessing Data
 
 #### Checking Normality (Skewness)
 
+Now we will check the normality of the numerical variables to see if they follow a normal distribution.
+In case they do not, we will apply transformations to make them follow a normal distribution.
+
+- person_age:
+  
 ```{r}
 skewness(data_Mod$person_age)
 ```
-```{r}	
-ggplot(data_Mod, aes(x = data_Mod$person_age)) +
-      geom_histogram(fill = "lightblue", color = "white", bins = 30) +
-      labs(title = paste("Distribución de", n), x = n, y = "Frecuencia") +
-      theme_minimal()
-```
+
+We get a skewness of 1.37, so we need to apply a transformation to improve the distribution.
 
 ```{r}
 skewness(log(data_Mod$person_age - 19))
 ```
 
-Vemos que aplicando esta transformación logarítmica, mejoramos la distribución de la variable 'person_age', 
-ya que la edad mínima de las personas es 20 años, por tanto restamos 19 para evitar el logaritmo de 0.
+We see that by applying this logarithmic transformation, we improve the distribution of the 'person_age'
+variable, since the minimum age of the people is 20 years, so we subtract 19 to avoid the logarithm of 0.
 
+- person_income:
+  
 ```{r}
 skewness(data_Mod$person_income)
 ```
-```{r}	
-ggplot(data_Mod, aes(x = data_Mod$person_income)) +
-      geom_histogram(fill = "lightblue", color = "white", bins = 30) +
-      labs(title = paste("Distribución de", n), x = n, y = "Frecuencia") +
-      theme_minimal()
-```
+
+We get a skewness of 1.31, so we need to apply another transformation, to improve the distribution.
 
 ```{r}
 skewness(log(data_Mod$person_income))
 ```
 
-Vemos que aplicando esta transformación logarítmica, mejoramos la distribución de la variable 'person_income'.
+We see that by applying this logarithmic transformation, we improve the distribution of the 'person_income'
+variable, going from 1.31 to -0.18, which is a significant improvement.
 
 - loan_amnt:
 
@@ -359,14 +413,22 @@ Vemos que aplicando esta transformación logarítmica, mejoramos la distribució
 skewness(data_Mod$loan_amnt)
 ```
 
-Nos sale una asimetría de 1.17, por tanto tenemos que aplicar otra transformación.
+We get a skewness of 1.17, so we need to apply a transformation to improve it.
 
 ```{r}
 skewness(sqrt(data_Mod$loan_amnt))
 skewness(log(data_Mod$loan_amnt))
 ```
 
-Como podemos ver, ambos solucionan el problema de asimetría, pero la transformación con raíz cuadrada es más efectiva.
+As we can see, both solve the asymmetry problem, but the square root transformation is more effective.
+
+- loan_int_rate:
+
+```{r}
+skewness(data_Mod$loan_int_rate)
+```
+
+We get a skewness of 0.21, so we do not need to apply any transformation.
 
 - loan_percent_income:
 
@@ -374,18 +436,19 @@ Como podemos ver, ambos solucionan el problema de asimetría, pero la transforma
 skewness(data_Mod$loan_percent_income)
 ```
 
-Nos sale una asimetría de 1.03, por tanto, es conveniente aplicar otra transformación.
+We get a skewness of 1.03, so we need to apply another transformation.
 
 ```{r}
 skewness(sqrt(data_Mod$loan_percent_income))
 skewness(log(data_Mod$loan_percent_income))
 ```
 
-Como podemos ver, ambos solucionan el problema de asimetría, pero la transformación con raíz cuadrada es más efectiva.
+As we can see, both solve the skewness problem, but the square root transformation is more effective.
 
 #### Creation of a better skewed dataset
 
-Con todas las transformaciones realizadas, procedemos a crear un nuevo dataset con las variables transformadas, ya que siguen mejor la distribución normal:
+With all the transformations made, we proceed to create a new dataset with the transformed variables,
+as they better follow the normal distribution:
 
 ```{r}
 data_Transformed <- data_Mod
@@ -398,29 +461,32 @@ data_Transformed$loan_percent_income <- sqrt(data_Mod$loan_percent_income)
 
 ## Model Building
 
-### Ordenar las variables
+### Sorting Variables
 
 ```{r}
-# Identificar las columnas numéricas y de tipo factor
+# Identify numeric and factor columns
 numeric_columns <- sapply(data_Transformed, is.numeric)
 factor_columns <- sapply(data_Transformed, is.factor)
 
-# Excluir la variable objetivo de las columnas numéricas y de tipo factor
+# Exclude the target variable from the numeric and factor columns
 numeric_columns <- numeric_columns & names(data_Transformed) != "loan_status"
 
-# Ordenar las columnas: primero las numéricas, luego las de tipo factor, y finalmente la variable objetivo
+# Order the columns: first the numeric ones, then the factor ones, and finally the target variable
 ordered_columns <- c(names(data_Transformed)[numeric_columns], 
                      names(data_Transformed)[factor_columns], 
                      "loan_status")
 
-# Reordenar el data frame
+# Reorder DataFrame
 data_Transformed <- data_Transformed[, ordered_columns]
 ```
 
 ### Data Normalization
 
+We ensure that all the numerical variables are normalized to the same scale, so that thre isn't one with a
+greater influence than the others.
+
 ```{r}
-## create normalization function
+# Create normalization function
 normalize <- function(x) {
   return ((x - min(x)) / (max(x) - min(x)))
 }
@@ -432,6 +498,298 @@ numerical_columns <- sapply(data_Transformed, is.numeric)
 data_Normalized <- data_Transformed
 ## normalize the iris numerical data
 data_Normalized[, numerical_columns] <- as.data.frame(lapply(data_Transformed[, numerical_columns], normalize))
+
+# Confirm that normalization worked
+summary(data_Normalized)
+```
+
+### Train-Test Split
+
+```{r}
+# Convertir las variables categóricas en variables dummy
+data_Normalized <- model.matrix(~ . - 1, data = data_Normalized)
+
+# Convertir el resultado a un data frame
+data_Normalized <- as.data.frame(data_Normalized)
+```
+
+```{r}
+## To reproduce the calculations
+seeds <- c(1357, 2468, 3579, 4680, 5791)
+set.seed(seeds[1])
+
+## Create an index to partition the data set
+ind <- sample(2, nrow(data_Normalized), replace=TRUE, prob=c(0.80, 0.20))
+
+data_Normalized.train <- data_Normalized[ind==1,]
+data_Normalized.test <- data_Normalized[ind==2,]
+```
+
+We have split the data into a training set and a test set, with 80% of the data in the training set and 20%
+in the test set. Let's check that the partitions have been done correctly.
+
+```{r}
+nrow(data_Normalized)
+nrow(data_Normalized.train)
+nrow(data_Normalized.test)
+```
+
+## Classification using Nearest Neighbors
+
+### Predictions
+
+```{r}
+## Build the classifier
+data_Normalized.knn <- knn(data_Normalized.train[, 1:20], data_Normalized.test[, 1:20], cl = data_Normalized.train[, 21], k = 3)
+```
+
+```{r}
+CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn, prop.chisq=FALSE)
+F1_Score(data_Normalized.knn, data_Normalized.test$loan_status, positive = "0")
+```
+
+Desde la tabla podemos ver que el modelo en lineas generales es preciso, con un margen de error del 0.108 (precisión del 89.2%). Por otro lado, si nos fijamos
+en la columna de aceptados, la precisión es del 0.724, un valor bastante bajo. Esto quiere decir que este modelo puede ser mas propenso a rechazar préstamos a esas muestras donde debería aceptarlos.
+
+Probaremos solo utilizando las variables numéricas a ver como se comporta el modelo.
+
+```{r}
+## Build the classifier
+data_Normalized.knn2 <- knn(data_Normalized.train[, 1:5], data_Normalized.test[, 1:5], cl = data_Normalized.train[, 21], k = 3)
+CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn2, prop.chisq=FALSE)
+```
+
+Como se puede ver, el modelo es menos preciso, lo que tiene sentido ya que las variables categóricas también influyen en la decisión de si se aprueba o no un préstamo.
+
+Ahora probaremos esta vez con 2 ks diferentes, 5 y 2.
+
+```{r}
+## Build the classifier
+data_Normalized.knn3 <- knn(data_Normalized.train[, 1:20], data_Normalized.test[, 1:20], cl = data_Normalized.train[, 21], k = 2)
+data_Normalized.knn4 <- knn(data_Normalized.train[, 1:20], data_Normalized.test[, 1:20], cl = data_Normalized.train[, 21], k = 5)
+CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn3, prop.chisq=FALSE)
+CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn4, prop.chisq=FALSE)
+```
+
+En ambos nuevos modelos no vemos mejorías sustanciales como para cambiar el modelo original, además de que el modelo original es el que menos tiempo tarda en ejecutarse.
+
+## Classification using Naive Bayes
+
+```{r}
+classifier.NB <- naiveBayes(x = data_Normalized.train[, 1:20], y = data_Normalized.train[, 21])
+data_Normalized.NB <- predict(classifier.NB, data_Normalized.test[, 1:20])
+
+CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.NB, prop.chisq=FALSE)
+accuracyNB <- sum(data_Normalized.NB == data_Normalized.test$loan_status) / nrow(data_Normalized.test)
+F1_Score(data_Normalized.NB, data_Normalized.test$loan_status, positive = "0")
+```
+
+In the case of the Naive Bayes model, we can see that the accuracy is around 10% lower than the KNN model, which is not a great result.
+It should also be noted that, as we can see in the table, the model takes a more conservative approach when it comes to evaluating loan profiles, therefore it is less likely to approve the loan request.
+Because of this, this model may be prefered to KNN in this case, as the bank .ay prefer taking a safer approach by rejecting more requests even though they should be valid rather than accepting more that shouldn't be valid
+
+## Classification using Decision Trees
+
+Para poder hacer uso de los árboles de decisión, necesitamos convertir las variables númericas en categóricas.
+
+### Conversion of Numerical Variables 
+
+
+```{r}
+## Convertir las variables numéricas en categóricas, divididas en intervalos:
+data_Mod$person_age <- cut(data$person_age, breaks = c(20, 25, 30, 40, 50), labels = c("20-25", "26-30", "31-40", "41-50"))
+data_Mod$person_income <- cut(data$person_income, breaks = c(0, 50000, 100000, 150000, 200000, 250000), labels = c("0-50k", "50k-100k", "100k-150k", "150k-200k", "200k-250k"))
+data_Mod$loan_amnt <- cut(data$loan_amnt, breaks = c(0, 5000, 10000, 20000, 35000), labels = c("0-5k", "5k-10k", "10k-20k", "20k-35k"))
+data_Mod$loan_int_rate <- cut(data$loan_int_rate, breaks = c(5, 8.5, 11, 13, 20), labels = c("5-8.5", "8.5-11", "11-13", "13-20"))
+data_Mod$loan_percent_income <- cut(data$loan_percent_income, breaks = c(0, 0.1, 0.2, 0.3, 0.4, 0.5), labels = c("0-0.1", "0.1-0.2", "0.2-0.3", "0.3-0.4", "0.4,0.5"))
+
+#Hacemos lo mismo con la variable objetivo:
+data_Mod$loan_status <- as.factor(data_Mod$loan_status)
+```
+
+### ID3 Algorithm
+
+```{r}
+## Create an index to partition the data set
+ind1 <- sample(2, nrow(data_Mod), replace = TRUE, prob = c(0.80, 0.20))
+data_Mod.train1 <- data_Mod[ind1 == 1, ]
+data_Mod.test1 <- data_Mod[ind1 == 2, ]
+
+# Crear el modelo
+ID3_1 <- J48(loan_status ~ person_age + person_income + loan_amnt + loan_int_rate + loan_percent_income, data = data_Mod.train1)
+plot(ID3_1)
+```
+
+Como podemos observar nos hemos pasado creando categorías, provocando que se dividan los datos de forma excesiva y puede llevar a producir overfitting.
+Por tanto, vamos a reducir el número de intervalos con tal de mejorarlo.
+
+```{r}
+data_Mod$person_age <- cut(data$person_age, 
+                           breaks = c(20, 25, 30, 40, 50), 
+                           labels = c("20-25", "26-30", "31-40", "41-50"))
+
+data_Mod$person_income <- cut(data$person_income, 
+                              breaks = c(0, 50000, 100000, 250000), 
+                              labels = c("0-50k", "50k-100k", "+100k"))
+
+data_Mod$loan_amnt <- cut(data$loan_amnt, 
+                          breaks = c(0, 10000, 20000, 35000), 
+                          labels = c("0-10k", "10k-20k", "+20k"))
+
+data_Mod$loan_int_rate <- cut(data$loan_int_rate, breaks = c(5, 8.5, 13, 20), labels = c("5-8.5", "8.5-13", "13-20"))
+
+data_Mod$loan_percent_income <- cut(data$loan_percent_income, 
+                                    breaks = c(0, 0.1, 0.2, 0.5), 
+                                    labels = c("0-0.1", "0.1-0.2", "+0.2"))
+```
+
+Para definir estos nuevos intervalos nos hemos centrado en los rangos donde había una mayor concentración de los datos.
+
+```{r}
+## Create an index to partition the data set
+ind2 <- sample(2, nrow(data_Mod), replace = TRUE, prob = c(0.80, 0.20))
+data_Mod.train2 <- data_Mod[ind2 == 1, ]
+data_Mod.test2 <- data_Mod[ind2 == 2, ]
+
+# Crear el modelo
+ID3_2 <- J48(loan_status ~ person_age + person_income + loan_amnt + loan_int_rate + loan_percent_income, data = data_Mod.train2)
+plot(ID3_2)
+```
+
+```{r}
+summary(ID3_1)
+```
+
+Veamos como se comporta con el conjunto test
+
+```{r}
+data_Mod.ID31 <- predict(ID3_1, data_Mod.test1)
+confusionMatrix(data_Mod.ID31, data_Mod.test1$loan_status)
+```
+
+Como vemos tenemos un accuracy del 80.6%, lo cual no está mal, pero podemos mejorar.
+
+```{r}
+summary(ID3_2)
+data_Mod.ID32 <- predict(ID3_2, data_Mod.test2)
+confusionMatrix(data_Mod.ID32, data_Mod.test2$loan_status)
+```
+
+Ahora añadiremos el resto de variables categóricas, basándonos en el segundo modelo, con intervalos más óptimos:
+
+
+```{r}
+# Crear el modelo
+ID3_3 <- J48(loan_status ~ ., data = data_Mod.train2)
+
+data_Mod.ID33 <- predict(ID3_3, data_Mod.test2)
+confusionMatrix(data_Mod.ID33, data_Mod.test2$loan_status)
+```
+
+Como hemos podido ver, el modelo ha mejorado, pero creemos que se puede optimizar. Por tanto, vamos a ver que variables son las más importantes poder optimizar el modelo sin perjudicar la precisión.
+
+```{r}
+info_gain <- information.gain(loan_status ~ ., data = data_Mod)
+print(info_gain)
+```
+
+Generamos un nuevo árbol solo con las variables que realmente tienen importancia
+
+```{r}
+# Crear modelo con las variables seleccionadas
+ID3_Sel <- J48(loan_status ~ previous_loan_defaults_on_file + loan_percent_income + person_home_ownership + person_income + loan_amnt + loan_intent, 
+               data = data_Mod.train2)
+
+data_Mod.ID3Sel <- predict(ID3_Sel, data_Mod.test2)
+confusionMatrix(data_Mod.ID3Sel, data_Mod.test2$loan_status)
+F1_Score(data_Mod.ID3Sel, data_Mod.test2$loan_status, positive = "0")
+```
+
+Como podemos observar, el modelo es más óptimo y la precisión se ha mantenido en un 87%, lo cual es un buen resultado.
+
+
+### C5.0 Algorithm
+
+```{r}
+C50 <- C5.0(loan_status ~ ., data = data_Mod.train2)
+data_Mod.C50 <- predict(C50, data_Mod.test2)
+confusionMatrix(data_Mod.C50, data_Mod.test2$loan_status)
+F1_Score(data_Mod.C50, data_Mod.test2$loan_status, positive = "0")
+```
+
+No observamos ninguna diferencia con los resultados obtenidos con el ID3, por tanto, no hay ninguna mejora.
+
+
+### CART Algorithm
+
+```{r}
+classifier.CART <- ctree(loan_status ~ ., data = data_Mod.train1)
+data_Mod.CART <- predict(classifier.CART, data_Mod.test1)
+confusionMatrix(data_Mod.CART, data_Mod.test1$loan_status)
+F1_Score(data_Mod.CART, data_Mod.test1$loan_status, positive = "0")
+```
+
+The results are similar to the ID3 model, they are a bit better but with a small margin. These are good results, but we should keep checking every tree model to see which one is the best.
+
+### Decision Tree using rpart
+
+```{r}
+classifier.rpart <- rpart(loan_status ~ ., data = data_Mod.train1, method = "class")
+data_Mod.rpart <- predict(classifier.rpart, data_Mod.test1, type = "class")
+confusionMatrix(data_Mod.rpart, data_Mod.test1$loan_status)
+F1_Score(data_Mod.rpart, data_Mod.test1$loan_status, positive = "0")
+```
+
+Yet again, the results given by the decision tree are similar to the ones given by previous tree models.
+In this case, it can be seen that this model is very reluctant to approving loans, so it may be a good model to use if the bank wants to be more conservative, as it offers a good enough accuracy while outputing safer results. 
+
+### Decision Tree using Tree
+
+```{r}
+classifier.tree <- tree(loan_status ~ ., data = data_Mod.train1)
+data_Mod.tree <- predict(classifier.tree, data_Mod.test1, type = "class")
+confusionMatrix(data_Mod.tree, data_Mod.test1$loan_status)
+F1_Score(data_Mod.tree, data_Mod.test1$loan_status, positive = "0")
+```
+
+## Classification without omitting variables
+
+### Ordenar las variables
+
+```{r}
+data <- read.csv("./loan_data.csv", header=TRUE, stringsAsFactors=TRUE)
+
+# Identificar las columnas numéricas y de tipo factor
+numeric_columns <- sapply(data, is.numeric)
+factor_columns <- sapply(data, is.factor)
+
+# Excluir la variable objetivo de las columnas numéricas y de tipo factor
+numeric_columns <- numeric_columns & names(data) != "loan_status"
+
+# Ordenar las columnas: primero las numéricas, luego las de tipo factor, y finalmente la variable objetivo
+ordered_columns <- c(names(data)[numeric_columns], 
+                     names(data)[factor_columns], 
+                     "loan_status")
+
+# Reordenar el data frame
+data <- data[, ordered_columns]
+```
+
+### Data Normalization
+
+```{r}
+## create normalization function
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+
+# Identificar las columnas numéricas
+numerical_columns <- sapply(data, is.numeric)
+
+# Aplicar una transformación (por ejemplo, normalización) solo a las columnas numéricas
+data_Normalized <- data
+## normalize the iris numerical data
+data_Normalized[, numerical_columns] <- as.data.frame(lapply(data[, numerical_columns], normalize))
 ## confirm that normalization worked
 summary(data_Normalized)
 ```
@@ -466,225 +824,47 @@ nrow(data_Normalized.train)
 nrow(data_Normalized.test)
 ```
 
-## Classification using Nearest Neighbors
-
-### Predictions
-
 ```{r}
-## Build the classifier
-data_Normalized.knn <- knn(data_Normalized.train[, 1:19], data_Normalized.test[, 1:19], cl = data_Normalized.train[, 20], k = 3)
-```
-
-```{r}
-CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn, prop.chisq=FALSE)
-```
-
-Desde la tabla podemos ver que el modelo en lineas generales es preciso, con un margen de error del 0.135 (precisión del 86.5%). Por otro lado, si nos fijamos
-en la columna de aceptados, la precisión es del 0.658, un valor bastante bajo. Esto quiere decir que este modelo puede ser mas propenso a rechazar préstamos a esas muestras donde debería aceptarlos.
-
-Probaremos solo utilizando las variables numéricas a ver como se comporta el modelo.
-
-```{r}
-## Build the classifier
-data_Normalized.knn2 <- knn(data_Normalized.train[, 1:4], data_Normalized.test[, 1:4], cl = data_Normalized.train[, 20], k = 3)
-CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn2, prop.chisq=FALSE)
-```
-
-Como se puede ver, el modelo es menos preciso, lo que tiene sentido ya que las variables categóricas también influyen en la decisión de si se aprueba o no un préstamo.
-
-Ahora probaremos esta vez con 2 ks diferentes, 5 y 2.
-
-```{r}
-## Build the classifier
-data_Normalized.knn3 <- knn(data_Normalized.train[, 1:19], data_Normalized.test[, 1:19], cl = data_Normalized.train[, 20], k = 2)
-data_Normalized.knn4 <- knn(data_Normalized.train[, 1:19], data_Normalized.test[, 1:19], cl = data_Normalized.train[, 20], k = 5)
-CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn3, prop.chisq=FALSE)
-CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn4, prop.chisq=FALSE)
-```
-
-En ambos nuevos modelos no vemos mejorías sustanciales como para cambiar el modelo original, además de que el modelo original es el que menos tiempo tarda en ejecutarse.
-
-## Classification using Naive Bayes
-
-```{r}
-classifier.NB <- naiveBayes(x = data_Normalized.train[, 1:19], y = data_Normalized.train[, 20])
-data_Normalized.NB <- predict(classifier.NB, data_Normalized.test[, 1:19])
-
-CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.NB, prop.chisq=FALSE)
-accuracyNB <- sum(data_Normalized.NB == data_Normalized.test$loan_status) / nrow(data_Normalized.test)
-```
-
-In the case of the Naive Bayes model, we can see that the accuracy is around 10% lower than the KNN model, which is not a great result.
-It should also be noted that, as we can see in the table, the model takes a more conservative approach when it comes to evaluating loan profiles, therefore it is less likely to approve the loan request.
-Because of this, this model may be prefered to KNN in this case, as the bank .ay prefer taking a safer approach by rejecting more requests even though they should be valid rather than accepting more that shouldn't be valid
-
-## Classification using Decision Trees
-
-Para poder hacer uso de los árboles de decisión, necesitamos convertir las variables númericas en categóricas.
-
-### Conversion of Numerical Variables 
-
-```{r}
-library(ggplot2)
-
-# Identificar las variables numéricas automáticamente
-numeric_vars <- names(data_Mod)[sapply(data_Mod, is.numeric)]
-
-# Crear un gráfico para cada variable numérica
-for (var in numeric_vars) {
-  p <- ggplot(data_Mod, aes_string(x = var)) +
-    geom_histogram(fill = "lightblue", color = "black", bins = 30) + # Histograma para variables numéricas
-    labs(title = paste("Distribución de", var), x = var, y = "Frecuencia") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotar etiquetas si es necesario
-  print(p) # Mostrar el gráfico
-}
-
-```
-
-
-```{r}
-## Convertir las variables numéricas en categóricas, divididas en intervalos:
-data_Mod$person_age <- cut(data$person_age, breaks = c(20, 25, 30, 40, 50), labels = c("20-25", "26-30", "31-40", "41-50"))
-data_Mod$person_income <- cut(data$person_income, breaks = c(0, 50000, 100000, 150000, 200000, 250000), labels = c("0-50k", "50k-100k", "100k-150k", "150k-200k", "200k-250k"))
-data_Mod$loan_amnt <- cut(data$loan_amnt, breaks = c(0, 5000, 10000, 20000, 35000), labels = c("0-5k", "5k-10k", "10k-20k", "20k-35k"))
-data_Mod$loan_percent_income <- cut(data$loan_percent_income, breaks = c(0, 0.1, 0.2, 0.3, 0.4, 0.5), labels = c("0-0.1", "0.1-0.2", "0.2-0.3", "0.3-0.4", "0.4,0.5"))
-
-#Hacemos lo mismo con la variable objetivo:
-data_Mod$loan_status <- as.factor(data_Mod$loan_status)
-```
-
-### ID3 Algorithm
-
-```{r}
-## Create an index to partition the data set
-ind1 <- sample(2, nrow(data_Mod), replace = TRUE, prob = c(0.80, 0.20))
-data_Mod.train1 <- data_Mod[ind1 == 1, ]
-data_Mod.test1 <- data_Mod[ind1 == 2, ]
-
-# Crear el modelo
-ID3_1 <- J48(loan_status ~ person_age + person_income + loan_amnt + loan_percent_income, data = data_Mod.train1)
-plot(ID3_1)
-```
-
-Como podemos observar nos hemos pasado creando categorías, provocando que se dividan los datos de forma excesiva y puede llevar a producir overfitting.
-Por tanto, vamos a reducir el número de intervalos con tal de mejorarlo.
-
-```{r}
-data_Mod$person_age <- cut(data$person_age, 
+data$person_age <- cut(data$person_age, 
                            breaks = c(20, 25, 30, 40, 50), 
                            labels = c("20-25", "26-30", "31-40", "41-50"))
 
-data_Mod$person_income <- cut(data$person_income, 
+data$person_income <- cut(data$person_income, 
                               breaks = c(0, 50000, 100000, 250000), 
                               labels = c("0-50k", "50k-100k", "+100k"))
 
-data_Mod$loan_amnt <- cut(data$loan_amnt, 
+data$loan_amnt <- cut(data$loan_amnt, 
                           breaks = c(0, 10000, 20000, 35000), 
                           labels = c("0-10k", "10k-20k", "+20k"))
 
-data_Mod$loan_percent_income <- cut(data$loan_percent_income, 
+data$loan_percent_income <- cut(data$loan_percent_income, 
                                     breaks = c(0, 0.1, 0.2, 0.5), 
                                     labels = c("0-0.1", "0.1-0.2", "+0.2"))
+
+                                    
 ```
 
 Para definir estos nuevos intervalos nos hemos centrado en los rangos donde había una mayor concentración de los datos.
 
 ```{r}
 ## Create an index to partition the data set
-ind2 <- sample(2, nrow(data_Mod), replace = TRUE, prob = c(0.80, 0.20))
-data_Mod.train2 <- data_Mod[ind2 == 1, ]
-data_Mod.test2 <- data_Mod[ind2 == 2, ]
+ind2 <- sample(2, nrow(data), replace = TRUE, prob = c(0.80, 0.20))
+data.train2 <- data[ind2 == 1, ]
+data.test2 <- data[ind2 == 2, ]
 
 # Crear el modelo
-ID3_2 <- J48(loan_status ~ person_age + person_income + loan_amnt + loan_percent_income, data = data_Mod.train2)
-plot(ID3_2)
+ID3_2 <- J48(loan_status ~ person_age + person_income + loan_amnt + loan_percent_income, data = data.train2)
 ```
 
 ```{r}
-summary(ID3_1)
+summary(ID3_2)
 ```
 
 Veamos como se comporta con el conjunto test
 
 ```{r}
-data_Mod.ID31 <- predict(ID3_1, data_Mod.test1)
-confusionMatrix(data_Mod.ID31, data_Mod.test1$loan_status)
+data.ID32 <- predict(ID3_2, data.test2)
+confusionMatrix(data.ID32, data.test2$loan_status)
 ```
 
-Como vemos tenemos un accuracy del 80.6%, lo cual no está mal, pero podemos mejorar.
-
-```{r}
-summary(ID3_2)
-data_Mod.ID32 <- predict(ID3_2, data_Mod.test2)
-confusionMatrix(data_Mod.ID32, data_Mod.test2$loan_status)
-```
-
-Ahora añadiremos el resto de variables categóricas, basándonos en el segundo modelo, con intervalos más óptimos:
-
-
-```{r}
-# Crear el modelo
-ID3_3 <- J48(loan_status ~ ., data = data_Mod.train2)
-
-data_Mod.ID33 <- predict(ID3_3, data_Mod.test2)
-confusionMatrix(data_Mod.ID33, data_Mod.test2$loan_status)
-```
-
-Como hemos podido ver, el modelo ha mejorado, pero creemos que se puede optimiza el modelo. Por tanto, vamos a ver que variables son las más importantes poder optimizar el modelo sin perjudicar la precisión.
-
-```{r}
-info_gain <- information.gain(loan_status ~ ., data = data_Mod)
-print(info_gain)
-```
-
-Generamos un nuevo árbol solo con las variables que realmente tienen importancia
-
-```{r}
-# Crear modelo con las variables seleccionadas
-ID3_Sel <- J48(loan_status ~ previous_loan_defaults_on_file + loan_percent_income + person_home_ownership + person_income + loan_amnt + loan_intent, 
-               data = data_Mod.train2)
-
-data_Mod.ID3Sel <- predict(ID3_Sel, data_Mod.test2)
-confusionMatrix(data_Mod.ID3Sel, data_Mod.test2$loan_status)
-```
-
-Como podemos observar, el modelo es más óptimo y la precisión se ha mantenido en un 87%, lo cual es un buen resultado.
-
-
-### C5.0 Algorithm
-
-```{r}
-library(C50)
-```
-
-```{r}
-C50 <- C5.0(loan_status ~ ., data = data_Mod.train2)
-data_Mod.C50 <- predict(C50, data_Mod.test2)
-confusionMatrix(data_Mod.C50, data_Mod.test2$loan_status)
-```
-
-No observamos ninguna diferencia con los resultados obtenidos con el ID3, por tanto, no hay ninguna mejora.
-
-
-### CART Algorithm
-
-```{r}
-classifier.CART <- ctree(loan_status ~ ., data = data_Mod.train1)
-data_Mod.CART <- predict(classifier.CART, data_Mod.test1)
-confusionMatrix(data_Mod.CART, data_Mod.test1$loan_status)
-```
-
-The results are similar to the ID3 model, athey are a bit better but with a small margin. These are good results, but we should keep checking every tree model to see which one is the best.
-
-### Decision Tree
-
-```{r}
-library(rpart.plot)
-classifier.rpart <- rpart(loan_status ~ ., data = data_Mod.train1, method = "class")
-data_Mod.rpart <- predict(classifier.rpart, data_Mod.test1, type = "class")
-confusionMatrix(data_Mod.rpart, data_Mod.test1$loan_status)
-```
-
-Yet again, the results given by the decision tree are similar to the ones given by previous tree models.
-In this case, it can be seen that this model is very reluctant to approving loans, so it may be a good model to use if the bank wants to be more conservative, as it offers a good enough accuracy while outputing safer results. 
+## Conclusion
