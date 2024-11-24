@@ -61,6 +61,7 @@ ggplot(data, aes(x = factor(loan_status, labels = c("Rechazado", "Aprobado")))) 
        x = "Loan status",
        y = "Quantity")
 ```
+
 Most loans end up getting denied, we aim to understand why that is the case and build a model that predicts the outcome as much as possible.
 
 ### Independent Variables
@@ -567,7 +568,7 @@ plot(ID3_1)
 ```
 
 Como podemos observar nos hemos pasado creando categorías, provocando que se dividan los datos de forma excesiva y puede llevar a producir overfitting.
-Por tanto, vamos a reducir el número de intervalos, para mejorar eso.
+Por tanto, vamos a reducir el número de intervalos con tal de mejorarlo.
 
 ```{r}
 data_Mod$person_age <- cut(data$person_age, 
@@ -587,7 +588,7 @@ data_Mod$loan_percent_income <- cut(data$loan_percent_income,
                                     labels = c("0-0.1", "0.1-0.2", "+0.2"))
 ```
 
-Para definir esto nuevos intervalos nos hemos centrado en los rangos donde había una mayor concentración de los datos.
+Para definir estos nuevos intervalos nos hemos centrado en los rangos donde había una mayor concentración de los datos.
 
 ```{r}
 ## Create an index to partition the data set
@@ -666,5 +667,24 @@ confusionMatrix(data_Mod.C50, data_Mod.test2$loan_status)
 No observamos ninguna diferencia con los resultados obtenidos con el ID3, por tanto, no hay ninguna mejora.
 
 
+### CART Algorithm
 
+```{r}
+classifier.CART <- ctree(loan_status ~ ., data = data_Mod.train1)
+data_Mod.CART <- predict(classifier.CART, data_Mod.test1)
+confusionMatrix(data_Mod.CART, data_Mod.test1$loan_status)
+```
 
+The results are similar to the ID3 model, athey are a bit better but with a small margin. These are good results, but we should keep checking every tree model to see which one is the best.
+
+### Decision Tree
+
+```{r}
+library(rpart.plot)
+classifier.rpart <- rpart(loan_status ~ ., data = data_Mod.train1, method = "class")
+data_Mod.rpart <- predict(classifier.rpart, data_Mod.test1, type = "class")
+confusionMatrix(data_Mod.rpart, data_Mod.test1$loan_status)
+```
+
+Yet again, the results given by the decision tree are similar to the ones given by previous tree models.
+In this case, it can be seen that this model is very reluctant to approving loans, so it may be a good model to use if the bank wants to be more conservative, as it offers a good enough accuracy while outputing safer results. 
