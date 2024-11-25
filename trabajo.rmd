@@ -222,7 +222,12 @@ names(data_Mod)
 ggcorr(data_Mod, label = TRUE, label_round = 2)
 ```
 
-Now we can see that all the correlations are appropriate, so we can proceed to the next stage.
+Now we can see that the variable 'person_age' has no correlation with other variables or with the target 
+variable. Therefore, it does not contribute to the model, so we will proceed to remove it.
+
+```{r}
+data_Mod <- data_Mod[, -c(1)]
+```
  
 ### Bivariate Analysis
 
@@ -230,25 +235,13 @@ Now we can see that all the correlations are appropriate, so we can proceed to t
 
 Comparing the loan status with the all numerical variables to see if there is any relationship between them.
 
-```{r} 
-p1 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = person_age), fill = "violet", alpha = 0.6) +
-  theme(axis.title = element_text(size = 8.5)) +
-  labs(title = "Loan Status vs Person Age", x = "Loan Status", y = "Person Age") +
-  theme_minimal()
-
-print(p1)
-```
-
-As we can saw earlier and we can confirm with this graph, the age of the person does not seem to have a 
-significant impact on the loan status, as the median age is very similar for both approved and rejected loans.
-
 ```{r}
-p2 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = person_income), fill = "#FFB6C1", alpha = 0.6) +
+p1 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = person_income), fill = "#FFB6C1", alpha = 0.6) +
   theme(axis.title = element_text(size = 8.5)) +
   labs(title = "Loan Status vs Person Income", x = "Loan Status", y = "Person Income") +
   theme_minimal()
 
-print(p2)
+print(p1)
 ```
 
 Loan approval is inversly proportional to the applicant's income, higher incomes tend to have their loans 
@@ -257,24 +250,24 @@ people with higher income should be both safer and more profitable, however that
 
 
 ```{r}
-p3 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_amnt), fill = "violet", alpha = 0.6) +
+p2 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_amnt), fill = "violet", alpha = 0.6) +
   theme(axis.title = element_text(size = 8.5)) +
   labs(title = "Loan Status vs Loan Amount", x = "Loan Status", y = "Loan Amount") +
   theme_minimal()
 
-print(p3)
+print(p2)
 ```
 
 As we can see, those who have their loans approved tend to request higher loan amounts, that is, the higher 
 the loan amount, the more likely it is to be approved. This makes sense as the bank would make more profit.
 
 ```{r}
-p4 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_percent_income), fill = "#FFDAB9", alpha = 0.6) +
+p3 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_percent_income), fill = "#FFDAB9", alpha = 0.6) +
   theme(axis.title = element_text(size = 8.5)) +
   labs(title = "Loan Status vs Loan Percent Income", x = "Loan Status", y = "Loan Percent Income") +
   theme_minimal()
 
-print(p4)
+print(p3)
 ```
 
 In this case, those who have a higher loan percentage over annual income are more likely to have their
@@ -282,12 +275,12 @@ loans approved. This is probably because the bank makes more profit from these l
 even though they are riskier than those with a lower percentage.
 
 ```{r}
-p5 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_int_rate), fill = "#FFDAB9", alpha = 0.6) +
+p4 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_int_rate), fill = "#FFDAB9", alpha = 0.6) +
   theme(axis.title = element_text(size = 8.5)) +
   labs(title = "Loan Status vs Loan Int Rate", x = "Loan Status", y = "Loan Int Rate") +
   theme_minimal()
 
-print(p5)
+print(p4)
 ```
 
 
@@ -377,21 +370,6 @@ variables to consider.
 Now we will check the normality of the numerical variables to see if they follow a normal distribution.
 In case they do not, we will apply transformations to make them follow a normal distribution.
 
-- **person_age**:
-  
-```{r}
-skewness(data_Mod$person_age)
-```
-
-We get a skewness of 1.37, so we need to apply a transformation to improve the distribution.
-
-```{r}
-skewness(log(data_Mod$person_age - 19))
-```
-
-We see that by applying this logarithmic transformation, we improve the distribution of the 'person_age'
-variable, since the minimum age of the people is 20 years, so we subtract 19 to avoid the logarithm of 0.
-
 - **person_income**:
   
 ```{r}
@@ -453,7 +431,6 @@ as they better follow the normal distribution:
 ```{r}
 data_Transformed <- data_Mod
 
-data_Transformed$person_age <- log(data_Mod$person_age - 19)
 data_Transformed$person_income <- log(data_Mod$person_income)
 data_Transformed$loan_amnt <- sqrt(data_Mod$loan_amnt)
 data_Transformed$loan_percent_income <- sqrt(data_Mod$loan_percent_income)
@@ -522,7 +499,7 @@ data_Normalized <- as.data.frame(data_Normalized)
 
 ```{r}
 ## To reproduce the calculations
-seeds <- c(1357, 2468, 3579, 4680, 5791)
+seeds <- c(1357, 2468, 3579)
 set.seed(seeds[1])
 
 ## Create an index to partition the data set
@@ -550,7 +527,7 @@ loan_status is in position 21. We have chosen k=3 as the default value.
 
 ```{r}
 ## Build the classifier
-data_Normalized.knn <- knn(data_Normalized.train[, 1:20], data_Normalized.test[, 1:20], cl = data_Normalized.train[, 21], k = 3)
+data_Normalized.knn <- knn(data_Normalized.train[, 1:19], data_Normalized.test[, 1:19], cl = data_Normalized.train[, 20], k = 3)
 
 confusionMatrix(as.factor(data_Normalized.test$loan_status), data_Normalized.knn)
 F1_Score(data_Normalized.knn, data_Normalized.test$loan_status, positive = "0")
@@ -567,7 +544,7 @@ column.
 
 ```{r}
 ## Build the classifier
-data_Normalized.knn2 <- knn(data_Normalized.train[, 1:5], data_Normalized.test[, 1:5], cl = data_Normalized.train[, 21], k = 3)
+data_Normalized.knn2 <- knn(data_Normalized.train[, 1:4], data_Normalized.test[, 1:4], cl = data_Normalized.train[, 20], k = 3)
 confusionMatrix(as.factor(data_Normalized.test$loan_status), data_Normalized.knn2)
 ```
 
@@ -578,12 +555,12 @@ Now, we will try with two different k values: 5 and 2.
 
 ```{r}
 ## Build the classifier
-data_Normalized.knn3 <- knn(data_Normalized.train[, 1:20], data_Normalized.test[, 1:20], cl = data_Normalized.train[, 21], k = 2)
+data_Normalized.knn3 <- knn(data_Normalized.train[, 1:19], data_Normalized.test[, 1:19], cl = data_Normalized.train[, 20], k = 2)
 confusionMatrix(as.factor(data_Normalized.test$loan_status), data_Normalized.knn3)
 ```
 
 ```{r}
-data_Normalized.knn4 <- knn(data_Normalized.train[, 1:20], data_Normalized.test[, 1:20], cl = data_Normalized.train[, 21], k = 5)
+data_Normalized.knn4 <- knn(data_Normalized.train[, 1:19], data_Normalized.test[, 1:19], cl = data_Normalized.train[, 20], k = 5)
 confusionMatrix(as.factor(data_Normalized.test$loan_status), data_Normalized.knn4)
 ```
 
@@ -593,8 +570,8 @@ Additionally, the original model is the one that takes the least time to execute
 ## Classification using Naive Bayes
 
 ```{r}
-classifier.NB <- naiveBayes(x = data_Normalized.train[, 1:20], y = data_Normalized.train[, 21])
-data_Normalized.NB <- predict(classifier.NB, data_Normalized.test[, 1:20])
+classifier.NB <- naiveBayes(x = data_Normalized.train[, 1:19], y = data_Normalized.train[, 20])
+data_Normalized.NB <- predict(classifier.NB, data_Normalized.test[, 1:19])
 
 confusionMatrix(as.factor(data_Normalized.test$loan_status), data_Normalized.NB)
 F1_Score(data_Normalized.NB, data_Normalized.test$loan_status, positive = "0")
@@ -617,7 +594,6 @@ In order to use decision trees, we need to convert the numerical variables into 
 
 ```{r}
 ## Convertir las variables numéricas en categóricas, divididas en intervalos:
-data_Mod$person_age <- cut(data$person_age, breaks = c(19, 25, 30, 40, 51), labels = c("20-25", "26-30", "31-40", "41-50"))
 data_Mod$person_income <- cut(data$person_income, breaks = c(0, 50000, 100000, 150000, 200000, 250000), labels = c("0-50k", "50k-100k", "100k-150k", "150k-200k", "200k-250k"))
 data_Mod$loan_amnt <- cut(data$loan_amnt, breaks = c(0, 5000, 10000, 20000, 35000), labels = c("0-5k", "5k-10k", "10k-20k", "20k-35k"))
 data_Mod$loan_int_rate <- cut(data$loan_int_rate, breaks = c(5, 8.5, 11, 13, 20), labels = c("5-8.5", "8.5-11", "11-13", "13-20"))
@@ -636,7 +612,7 @@ data_Mod.train1 <- data_Mod[ind1 == 1, ]
 data_Mod.test1 <- data_Mod[ind1 == 2, ]
 
 # Crear el modelo
-ID3_1 <- J48(loan_status ~ person_age + person_income + loan_amnt + loan_int_rate + loan_percent_income, data = data_Mod.train1)
+ID3_1 <- J48(loan_status ~ person_income + loan_amnt + loan_int_rate + loan_percent_income, data = data_Mod.train1)
 ```
 
 Once we have built the tree, let's see how it performs with the test set.
@@ -670,7 +646,7 @@ information.gain(loan_status ~ ., data = data_Mod)
 ```
 
 We generated a new tree using only the variables that are truly important. In this case, we have removed the 
-4 variables with the least importance (person_age, person_gender, person_education, and loan_amnt):
+3 variables with the least importance (person_gender, person_education, and loan_amnt):
 
 ```{r}
 # Crear modelo con las variables seleccionadas
@@ -683,7 +659,7 @@ F1_Score(data_Mod.ID2Sel, data_Mod.test1$loan_status, positive = "0")
 ```
 
 The accuracy has dropped to 87.3%, a decrease of 3%. Nevertheless, we believe the model has been 
-significantly optimized, as by removing 4 variables, it produces far fewer nodes. Depending on the purpose,
+significantly optimized, as by removing 3 variables, it produces far fewer nodes. Depending on the purpose,
 a 3% drop may not be worth it.
 
 
@@ -741,7 +717,7 @@ To conduct more tests, let's check if what we did earlier by removing variables 
 with other independent variables was correct. For that, we will compare one of the previous models, but 
 without omitting any variables.
 
-### Ordenar las variables
+### Sorting variables
 
 ```{r}
 data <- read.csv("./loan_data.csv", header=TRUE, stringsAsFactors=TRUE)
@@ -771,9 +747,9 @@ normalize <- function(x) {
 }
 
 numerical_columns <- sapply(data, is.numeric)
-# Aplicar una transformación (por ejemplo, normalización) solo a las columnas numéricas
+
 data_NoModified <- data
-## normalize the iris numerical data
+## normalize the numerical data
 data_NoModified[, numerical_columns] <- as.data.frame(lapply(data[, numerical_columns], normalize))
 ## confirm that normalization worked
 summary(data_NoModified)
@@ -791,7 +767,7 @@ data_NoModified <- as.data.frame(data_NoModified)
 
 ```{r}
 ## To reproduce the calculations
-seeds <- c(1357, 2468, 3579, 4680, 5791)
+seeds <- c(1357, 2468, 3579)
 set.seed(seeds[1])
 
 ## Create an index to partition the data set
@@ -819,3 +795,162 @@ As we can see, both the F1 score and accuracy decrease, and the model itself is 
 variables with high correlation, unnecessary data is added, which slows down the model.
 
 ## Conclusion
+
+Our main objective was to understand what factors influence loan approvals and to create a model that 
+accurately predict whether a loan would be approved or not.
+
+Our first task was dealing with the data, due to the fact that our dataset contained 45000 loan applications 
+with 13 different attributes numerical and categorical and an objective variable telling us if the loan was 
+approved or rejected.
+
+As we explored the data, we discovered some 'odds' like applicants with unrealistically high ages and 
+incomes, or loan percentages that didn't make sense. To ensure our models were working with reliable 
+information, we cleaned up these anomalies so the data reflected realistic scenarios.
+
+Using differents plots and transformations we examined how each variable behaved and how it related to the 
+loan approval status. This exploratory analysis revealed some key insights:
+
+- **Influential Factors:** Variables like previous_loan_defaults_on_file were strong indicators of whether a 
+loan would be approved.
+
+- **Data Skewness:** Many numerical variables were skewed to the right, which meant we needed to adjust them 
+to better fit the models we planned to use. 
+
+As has been said before, we applied transformations like logarithms and square roots to improve the skewness, 
+because those models work better when data is normally distributed.
+
+We also looked at how the variables were correlated with each other. We found that some variables, such as 
+person_age, person_emp_exp and cb_person_cred_hist_length, were highly correlated. To avoid issues like 
+multicollinearity—which can negatively impact model performance—we decided to remove these variables.
+
+With our data prepped and ready, we built and evaluated several classification models.
+
+**1. k-Nearest Neighbors (KNN):**
+
+We normalized the data and converted categorical variables into numerical format using one-hot encoding. 
+We tried different values of k and found that k=3 gave us the best results.
+
+**2. Naive Bayes:**
+
+**3. Decision Trees:**
+
+We explored various algorithms, including ID3, C5.0, CART, and we used packages like rpart and tree.
+
+The ID3 algorithm, when using all variables, reached about 90.3% accuracy.
+Simplifying the model by focusing on the most important features slightly reduced accuracy to 87.3%, but made 
+the model more efficient and easier to interpret.
+
+The C5.0, CART and the other algorithms offered slight improvements over ID3, but the gains were minimal.
+
+To ensure our decision to exclude certain variables, we ran additional tests without omitting any features. 
+The results confirmed that including highly correlated variables didn't improve model performance and 
+sometimes even reduced accuracy due to added complexity.
+
+### Testing different seeds of train/test
+
+We decided to test our models using different random seeds and varying the train-test split ratios.
+This approach helped us understand how sensitive our models were to changes in the data partitioning.
+
+#### Seed 1
+
+#### 0.8 Train - 0.2 Test
+
+- **KNN-3:** 89.1% accuracy. F1-Score: 0.93 
+- **KNN-2:** 88.2% accuracy.
+- **KNN-5:** 89.5% accuracy. 
+  
+- **Naive Bayes:** 74.7% accuracy. F1-Score: 0.806
+  
+- **ID3:** 87.2% accuracy. F1-Score: 0.921
+- **C5.0:** 90.2% accuracy. F1-Score: 0.937
+- **CART:** 90.2% accuracy. F1-Score: 0.938
+- **rpart:** 89.4% accuracy. F1-Score: 0.933
+- **tree:** 88.2% accuracy. F1-Score: 0.924
+
+- **KNN-No_Modified:** 88.5% accuracy. F1-Score: 0.927
+
+#### 0.7 Train - 0.3 Test
+
+- **KNN-3:** 89.2% accuracy. F1-Score: 0.931 
+- **KNN-2:** 87.9% accuracy.
+- **KNN-5:** 89.6% accuracy. 
+  
+- **Naive Bayes:** 74.65% accuracy. F1-Score: 0.806
+  
+- **ID3:** 87.4% accuracy. F1-Score: 0.922
+- **C5.0:** 90.7% accuracy. F1-Score: 0.941
+- **CART:** 90.5% accuracy. F1-Score: 0.940
+- **rpart:** 90.2% accuracy. F1-Score: 0.938
+- **tree:** 89.1% accuracy. F1-Score: 0.931
+
+- **KNN-No_Modified:** 88.4% accuracy. F1-Score: 0.927
+
+#### 0.9 Train - 0.1 Test
+
+- **KNN-3:** 88.8% accuracy. F1-Score: 0.929 
+- **KNN-2:** 87.5% accuracy.
+- **KNN-5:** 89.8% accuracy. 
+  
+- **Naive Bayes:** 75.7% accuracy. F1-Score: 0.815
+  
+- **ID3:** 87.4% accuracy. F1-Score: 0.923
+- **C5.0:** 90.3% accuracy. F1-Score: 0.938
+- **CART:** 90.4% accuracy. F1-Score: 0.938
+- **rpart:** 89.7% accuracy. F1-Score: 0.934
+- **tree:** 88.5% accuracy. F1-Score: 0.926
+
+- **KNN-No_Modified:** 88.7% accuracy. F1-Score: 0.929
+
+#### Seed 2
+
+- **KNN-3:** 89.1% accuracy. F1-Score: 0.93
+- **KNN-2:** 87.6% accuracy.
+- **KNN-5:** 89.5% accuracy. 
+  
+- **Naive Bayes:** 74.7% accuracy. F1-Score: 0.807
+  
+- **ID3:** 87.4% accuracy. F1-Score: 0.922
+- **C5.0:** 90.3% accuracy. F1-Score: 0.938
+- **CART:** 90.3% accuracy. F1-Score: 0.938
+- **rpart:** 89.7% accuracy. F1-Score: 0.935
+- **tree:** 88.6% accuracy. F1-Score: 0.927
+
+- **KNN-No_Modified:** 88.4% accuracy. F1-Score: 0.926
+
+#### Seed 3
+
+- **KNN-3:** 89.7% accuracy. F1-Score: 0.935
+- **KNN-2:** 87.8% accuracy.
+- **KNN-5:** 90% accuracy. 
+  
+- **Naive Bayes:** 74% accuracy. F1-Score: 0.801
+  
+- **ID3:** 87.4% accuracy. F1-Score: 0.923
+- **C5.0:** 90.2% accuracy. F1-Score: 0.938
+- **CART:** 90% accuracy. F1-Score: 0.936
+- **rpart:** 89.4% accuracy. F1-Score: 0.933
+- **tree:** 87.9% accuracy. F1-Score: 0.923
+
+- **KNN-No_Modified:** 89.1% accuracy. F1-Score: 0.93
+
+We can observe that our models are quite stable, as the results are very similar across different seeds 
+and train-test splits. 
+
+### Choosing the best model
+
+After extensive testing with different seeds and train-test splits, it became evident that the Decision Tree using the C5.0 algorithm
+consistently outperformed the other models. 
+
+Across various seeds and data splits, the C5.0 model maintained an accuracy of around 90.2% to 90.7% and an F1-Score 
+in the vicinity of 0.938 to 0.941.
+
+### Our Learnings
+
+We realized how crucial it is to start with clean, accurate data. Handling outliers and missing values can dramatically affect model performance.
+
+Our efforts in normalizing distributions and removing multicollinear variables paid off.
+
+By experimenting with different algorithms, we saw firsthand how models like Naive Bayes, KNN, and decision trees behave under various conditions. 
+
+### Final Conclusion
+
