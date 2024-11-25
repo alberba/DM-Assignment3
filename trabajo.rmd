@@ -377,7 +377,7 @@ variables to consider.
 Now we will check the normality of the numerical variables to see if they follow a normal distribution.
 In case they do not, we will apply transformations to make them follow a normal distribution.
 
-- person_age:
+- **person_age**:
   
 ```{r}
 skewness(data_Mod$person_age)
@@ -392,7 +392,7 @@ skewness(log(data_Mod$person_age - 19))
 We see that by applying this logarithmic transformation, we improve the distribution of the 'person_age'
 variable, since the minimum age of the people is 20 years, so we subtract 19 to avoid the logarithm of 0.
 
-- person_income:
+- **person_income**:
   
 ```{r}
 skewness(data_Mod$person_income)
@@ -407,7 +407,7 @@ skewness(log(data_Mod$person_income))
 We see that by applying this logarithmic transformation, we improve the distribution of the 'person_income'
 variable, going from 1.31 to -0.18, which is a significant improvement.
 
-- loan_amnt:
+- **loan_amnt**:
 
 ```{r}
 skewness(data_Mod$loan_amnt)
@@ -422,7 +422,7 @@ skewness(log(data_Mod$loan_amnt))
 
 As we can see, both solve the asymmetry problem, but the square root transformation is more effective.
 
-- loan_int_rate:
+- **loan_int_rate**:
 
 ```{r}
 skewness(data_Mod$loan_int_rate)
@@ -430,7 +430,7 @@ skewness(data_Mod$loan_int_rate)
 
 We get a skewness of 0.21, so we do not need to apply any transformation.
 
-- loan_percent_income:
+- **loan_percent_income**:
 
 ```{r}
 skewness(data_Mod$loan_percent_income)
@@ -463,6 +463,9 @@ data_Transformed$loan_percent_income <- sqrt(data_Mod$loan_percent_income)
 
 ### Sorting Variables
 
+To better handle the data, we find it convenient to reorder the columns, placing the numerical columns 
+first, followed by the categorical ones, and finally the target variable.
+
 ```{r}
 # Identify numeric and factor columns
 numeric_columns <- sapply(data_Transformed, is.numeric)
@@ -482,7 +485,7 @@ data_Transformed <- data_Transformed[, ordered_columns]
 
 ### Data Normalization
 
-We ensure that all the numerical variables are normalized to the same scale, so that thre isn't one with a
+We ensure that all the numerical variables are normalized to the same scale, so that there isn't one with a
 greater influence than the others.
 
 ```{r}
@@ -505,8 +508,12 @@ summary(data_Normalized)
 
 ### Train-Test Split
 
+Before splitting into train and test sets, it is important to know that for k-Nearest Neighbors and Naive 
+Bayes, all variables need to be numeric. For categorical variables, we use one-hot encoding to convert them 
+into numeric variables, where each category becomes a new binary column.
+
 ```{r}
-# Convertir las variables categóricas en variables dummy
+# Convertir las variables categóricas en variables one hot encoding
 data_Normalized <- model.matrix(~ . - 1, data = data_Normalized)
 
 # Convertir el resultado a un data frame
@@ -538,40 +545,50 @@ nrow(data_Normalized.test)
 
 ### Predictions
 
+We will start building the KNN model, where the independent variables range from position 1 to 20, and 
+loan_status is in position 21. We have chosen k=3 as the default value.
+
 ```{r}
 ## Build the classifier
 data_Normalized.knn <- knn(data_Normalized.train[, 1:20], data_Normalized.test[, 1:20], cl = data_Normalized.train[, 21], k = 3)
-```
 
-```{r}
-CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn, prop.chisq=FALSE)
+confusionMatrix(as.factor(data_Normalized.test$loan_status), data_Normalized.knn)
 F1_Score(data_Normalized.knn, data_Normalized.test$loan_status, positive = "0")
 ```
 
-Desde la tabla podemos ver que el modelo en lineas generales es preciso, con un margen de error del 0.108 (precisión del 89.2%). Por otro lado, si nos fijamos
-en la columna de aceptados, la precisión es del 0.724, un valor bastante bajo. Esto quiere decir que este modelo puede ser mas propenso a rechazar préstamos a esas muestras donde debería aceptarlos.
+From the table, we can see that the model is generally accurate, with an error margin of 0.108 (89.2% 
+accuracy). On the other hand, if we focus on the 'accepted' column, the accuracy is 0.724, which is quite 
+low. This means that the model may be more prone to approving loans for cases where it should reject them. 
+This could have a **negative impact on the bank**, as it would have to take on more risks.
 
-Probaremos solo utilizando las variables numéricas a ver como se comporta el modelo.
+To understand why it is important to convert categorical variables into numerical ones instead of ignoring 
+them, we will create a model using only the numerical variables. These range from the first to the fifth 
+column.
 
 ```{r}
 ## Build the classifier
 data_Normalized.knn2 <- knn(data_Normalized.train[, 1:5], data_Normalized.test[, 1:5], cl = data_Normalized.train[, 21], k = 3)
-CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn2, prop.chisq=FALSE)
+confusionMatrix(as.factor(data_Normalized.test$loan_status), data_Normalized.knn2)
 ```
 
-Como se puede ver, el modelo es menos preciso, lo que tiene sentido ya que las variables categóricas también influyen en la decisión de si se aprueba o no un préstamo.
+As we can see, the model is less accurate, which makes sense since the categorical variables also influence 
+the decision of whether a loan is approved or not.
 
-Ahora probaremos esta vez con 2 ks diferentes, 5 y 2.
+Now, we will try with two different k values: 5 and 2.
 
 ```{r}
 ## Build the classifier
 data_Normalized.knn3 <- knn(data_Normalized.train[, 1:20], data_Normalized.test[, 1:20], cl = data_Normalized.train[, 21], k = 2)
-data_Normalized.knn4 <- knn(data_Normalized.train[, 1:20], data_Normalized.test[, 1:20], cl = data_Normalized.train[, 21], k = 5)
-CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn3, prop.chisq=FALSE)
-CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.knn4, prop.chisq=FALSE)
+confusionMatrix(as.factor(data_Normalized.test$loan_status), data_Normalized.knn3)
 ```
 
-En ambos nuevos modelos no vemos mejorías sustanciales como para cambiar el modelo original, además de que el modelo original es el que menos tiempo tarda en ejecutarse.
+```{r}
+data_Normalized.knn4 <- knn(data_Normalized.train[, 1:20], data_Normalized.test[, 1:20], cl = data_Normalized.train[, 21], k = 5)
+confusionMatrix(as.factor(data_Normalized.test$loan_status), data_Normalized.knn4)
+```
+
+In both new models, we don't see any substantial improvements that would justify changing the original model. 
+Additionally, the original model is the one that takes the least time to execute.
 
 ## Classification using Naive Bayes
 
@@ -579,29 +596,32 @@ En ambos nuevos modelos no vemos mejorías sustanciales como para cambiar el mod
 classifier.NB <- naiveBayes(x = data_Normalized.train[, 1:20], y = data_Normalized.train[, 21])
 data_Normalized.NB <- predict(classifier.NB, data_Normalized.test[, 1:20])
 
-CrossTable(x = data_Normalized.test$loan_status, y = data_Normalized.NB, prop.chisq=FALSE)
-accuracyNB <- sum(data_Normalized.NB == data_Normalized.test$loan_status) / nrow(data_Normalized.test)
+confusionMatrix(as.factor(data_Normalized.test$loan_status), data_Normalized.NB)
 F1_Score(data_Normalized.NB, data_Normalized.test$loan_status, positive = "0")
 ```
 
-In the case of the Naive Bayes model, we can see that the accuracy is around 10% lower than the KNN model, which is not a great result.
-It should also be noted that, as we can see in the table, the model takes a more conservative approach when it comes to evaluating loan profiles, therefore it is less likely to approve the loan request.
-Because of this, this model may be prefered to KNN in this case, as the bank .ay prefer taking a safer approach by rejecting more requests even though they should be valid rather than accepting more that shouldn't be valid
+In the case of the Naive Bayes model, we can see that the accuracy is around 10% lower than the KNN model, 
+which is not a great result. This may be due to the fact that in the Naive Bayes model, it is assumed that
+the variables are conditionally independent, when in reality they are not.
+
+It should also be noted that, as we can see in the table, the model takes a more conservative approach when 
+it comes to evaluating loan profiles, therefore it is less likely to approve the loan request. Because of 
+this, this model may be prefered to KNN in this case, as the bank may prefer taking a safer approach by 
+rejecting more requests even though they should be valid rather than accepting more that shouldn't be valid
 
 ## Classification using Decision Trees
 
-Para poder hacer uso de los árboles de decisión, necesitamos convertir las variables númericas en categóricas.
+In order to use decision trees, we need to convert the numerical variables into categorical ones.
 
 ### Conversion of Numerical Variables 
 
-
 ```{r}
 ## Convertir las variables numéricas en categóricas, divididas en intervalos:
-data_Mod$person_age <- cut(data$person_age, breaks = c(20, 25, 30, 40, 50), labels = c("20-25", "26-30", "31-40", "41-50"))
+data_Mod$person_age <- cut(data$person_age, breaks = c(19, 25, 30, 40, 51), labels = c("20-25", "26-30", "31-40", "41-50"))
 data_Mod$person_income <- cut(data$person_income, breaks = c(0, 50000, 100000, 150000, 200000, 250000), labels = c("0-50k", "50k-100k", "100k-150k", "150k-200k", "200k-250k"))
 data_Mod$loan_amnt <- cut(data$loan_amnt, breaks = c(0, 5000, 10000, 20000, 35000), labels = c("0-5k", "5k-10k", "10k-20k", "20k-35k"))
 data_Mod$loan_int_rate <- cut(data$loan_int_rate, breaks = c(5, 8.5, 11, 13, 20), labels = c("5-8.5", "8.5-11", "11-13", "13-20"))
-data_Mod$loan_percent_income <- cut(data$loan_percent_income, breaks = c(0, 0.1, 0.2, 0.3, 0.4, 0.5), labels = c("0-0.1", "0.1-0.2", "0.2-0.3", "0.3-0.4", "0.4,0.5"))
+data_Mod$loan_percent_income <- cut(data$loan_percent_income, breaks = c(0, 0.1, 0.2, 0.3, 0.4, 0.67), labels = c("0-0.1", "0.1-0.2", "0.2-0.3", "0.3-0.4", "0.4-0.67"))
 
 #Hacemos lo mismo con la variable objetivo:
 data_Mod$loan_status <- as.factor(data_Mod$loan_status)
@@ -617,107 +637,68 @@ data_Mod.test1 <- data_Mod[ind1 == 2, ]
 
 # Crear el modelo
 ID3_1 <- J48(loan_status ~ person_age + person_income + loan_amnt + loan_int_rate + loan_percent_income, data = data_Mod.train1)
-plot(ID3_1)
 ```
 
-Como podemos observar nos hemos pasado creando categorías, provocando que se dividan los datos de forma excesiva y puede llevar a producir overfitting.
-Por tanto, vamos a reducir el número de intervalos con tal de mejorarlo.
-
-```{r}
-data_Mod$person_age <- cut(data$person_age, 
-                           breaks = c(20, 25, 30, 40, 50), 
-                           labels = c("20-25", "26-30", "31-40", "41-50"))
-
-data_Mod$person_income <- cut(data$person_income, 
-                              breaks = c(0, 50000, 100000, 250000), 
-                              labels = c("0-50k", "50k-100k", "+100k"))
-
-data_Mod$loan_amnt <- cut(data$loan_amnt, 
-                          breaks = c(0, 10000, 20000, 35000), 
-                          labels = c("0-10k", "10k-20k", "+20k"))
-
-data_Mod$loan_int_rate <- cut(data$loan_int_rate, breaks = c(5, 8.5, 13, 20), labels = c("5-8.5", "8.5-13", "13-20"))
-
-data_Mod$loan_percent_income <- cut(data$loan_percent_income, 
-                                    breaks = c(0, 0.1, 0.2, 0.5), 
-                                    labels = c("0-0.1", "0.1-0.2", "+0.2"))
-```
-
-Para definir estos nuevos intervalos nos hemos centrado en los rangos donde había una mayor concentración de los datos.
-
-```{r}
-## Create an index to partition the data set
-ind2 <- sample(2, nrow(data_Mod), replace = TRUE, prob = c(0.80, 0.20))
-data_Mod.train2 <- data_Mod[ind2 == 1, ]
-data_Mod.test2 <- data_Mod[ind2 == 2, ]
-
-# Crear el modelo
-ID3_2 <- J48(loan_status ~ person_age + person_income + loan_amnt + loan_int_rate + loan_percent_income, data = data_Mod.train2)
-plot(ID3_2)
-```
-
-```{r}
-summary(ID3_1)
-```
-
-Veamos como se comporta con el conjunto test
+Once we have built the tree, let's see how it performs with the test set.
 
 ```{r}
 data_Mod.ID31 <- predict(ID3_1, data_Mod.test1)
 confusionMatrix(data_Mod.ID31, data_Mod.test1$loan_status)
 ```
 
-Como vemos tenemos un accuracy del 80.6%, lo cual no está mal, pero podemos mejorar.
+As we can see, we have an accuracy of 81.5%, which is not bad, but there is room for improvement.
 
-```{r}
-summary(ID3_2)
-data_Mod.ID32 <- predict(ID3_2, data_Mod.test2)
-confusionMatrix(data_Mod.ID32, data_Mod.test2$loan_status)
-```
-
-Ahora añadiremos el resto de variables categóricas, basándonos en el segundo modelo, con intervalos más óptimos:
+Now, we will add the rest of the categorical variables, based on the second model, with more optimal 
+intervals:
 
 
 ```{r}
 # Crear el modelo
-ID3_3 <- J48(loan_status ~ ., data = data_Mod.train2)
+ID3_2 <- J48(loan_status ~ ., data = data_Mod.train1)
 
-data_Mod.ID33 <- predict(ID3_3, data_Mod.test2)
-confusionMatrix(data_Mod.ID33, data_Mod.test2$loan_status)
+data_Mod.ID32 <- predict(ID3_2, data_Mod.test1)
+confusionMatrix(data_Mod.ID32, data_Mod.test1$loan_status)
+F1_Score(data_Mod.ID32, data_Mod.test1$loan_status, positive = "0")
 ```
 
-Como hemos podido ver, el modelo ha mejorado, pero creemos que se puede optimizar. Por tanto, vamos a ver que variables son las más importantes poder optimizar el modelo sin perjudicar la precisión.
+As we have seen, the model has improved significantly. On the other hand, we believe the tree may be 
+overloaded with nodes, so let's see which variables are the most important in order to optimize the model 
+without compromising accuracy.
 
 ```{r}
-info_gain <- information.gain(loan_status ~ ., data = data_Mod)
-print(info_gain)
+information.gain(loan_status ~ ., data = data_Mod)
 ```
 
-Generamos un nuevo árbol solo con las variables que realmente tienen importancia
+We generated a new tree using only the variables that are truly important. In this case, we have removed the 
+4 variables with the least importance (person_age, person_gender, person_education, and loan_amnt):
 
 ```{r}
 # Crear modelo con las variables seleccionadas
-ID3_Sel <- J48(loan_status ~ previous_loan_defaults_on_file + loan_percent_income + person_home_ownership + person_income + loan_amnt + loan_intent, 
-               data = data_Mod.train2)
+ID2_Sel <- J48(loan_status ~ previous_loan_defaults_on_file + loan_percent_income + person_home_ownership + person_income + loan_intent, 
+               data = data_Mod.train1)
 
-data_Mod.ID3Sel <- predict(ID3_Sel, data_Mod.test2)
-confusionMatrix(data_Mod.ID3Sel, data_Mod.test2$loan_status)
-F1_Score(data_Mod.ID3Sel, data_Mod.test2$loan_status, positive = "0")
+data_Mod.ID2Sel <- predict(ID2_Sel, data_Mod.test1)
+confusionMatrix(data_Mod.ID2Sel, data_Mod.test1$loan_status)
+F1_Score(data_Mod.ID2Sel, data_Mod.test1$loan_status, positive = "0")
 ```
 
-Como podemos observar, el modelo es más óptimo y la precisión se ha mantenido en un 87%, lo cual es un buen resultado.
+The accuracy has dropped to 87.3%, a decrease of 3%. Nevertheless, we believe the model has been 
+significantly optimized, as by removing 4 variables, it produces far fewer nodes. Depending on the purpose,
+a 3% drop may not be worth it.
 
 
 ### C5.0 Algorithm
 
 ```{r}
-C50 <- C5.0(loan_status ~ ., data = data_Mod.train2)
-data_Mod.C50 <- predict(C50, data_Mod.test2)
-confusionMatrix(data_Mod.C50, data_Mod.test2$loan_status)
-F1_Score(data_Mod.C50, data_Mod.test2$loan_status, positive = "0")
+C50 <- C5.0(loan_status ~ ., data = data_Mod.train1)
+data_Mod.C50 <- predict(C50, data_Mod.test1)
+confusionMatrix(data_Mod.C50, data_Mod.test1$loan_status)
+F1_Score(data_Mod.C50, data_Mod.test1$loan_status, positive = "0")
 ```
 
-No observamos ninguna diferencia con los resultados obtenidos con el ID3, por tanto, no hay ninguna mejora.
+We observe a slight improvement compared to the ID3 model, but it is not significant. This may be due to the 
+fact that not all partitions are distributed in the same way, so the C5.0 model may benefit in this case. 
+However, the improvement is almost negligible.
 
 
 ### CART Algorithm
@@ -729,7 +710,7 @@ confusionMatrix(data_Mod.CART, data_Mod.test1$loan_status)
 F1_Score(data_Mod.CART, data_Mod.test1$loan_status, positive = "0")
 ```
 
-The results are similar to the ID3 model, they are a bit better but with a small margin. These are good results, but we should keep checking every tree model to see which one is the best.
+The results are similar to those obtained with C5.0; they are slightly worse, but with a very small margin.
 
 ### Decision Tree using rpart
 
@@ -752,7 +733,13 @@ confusionMatrix(data_Mod.tree, data_Mod.test1$loan_status)
 F1_Score(data_Mod.tree, data_Mod.test1$loan_status, positive = "0")
 ```
 
+The results are still quite similar, although this model performs slightly worse than the previous ones.
+
 ## Classification without omitting variables
+
+To conduct more tests, let's check if what we did earlier by removing variables that had a high correlation
+with other independent variables was correct. For that, we will compare one of the previous models, but 
+without omitting any variables.
 
 ### Ordenar las variables
 
@@ -760,14 +747,14 @@ F1_Score(data_Mod.tree, data_Mod.test1$loan_status, positive = "0")
 data <- read.csv("./loan_data.csv", header=TRUE, stringsAsFactors=TRUE)
 
 # Identificar las columnas numéricas y de tipo factor
-numeric_columns <- sapply(data, is.numeric)
+numerical_columns <- sapply(data, is.numeric)
 factor_columns <- sapply(data, is.factor)
 
 # Excluir la variable objetivo de las columnas numéricas y de tipo factor
-numeric_columns <- numeric_columns & names(data) != "loan_status"
+numerical_columns <- numerical_columns & names(data) != "loan_status"
 
 # Ordenar las columnas: primero las numéricas, luego las de tipo factor, y finalmente la variable objetivo
-ordered_columns <- c(names(data)[numeric_columns], 
+ordered_columns <- c(names(data)[numerical_columns], 
                      names(data)[factor_columns], 
                      "loan_status")
 
@@ -783,25 +770,23 @@ normalize <- function(x) {
   return ((x - min(x)) / (max(x) - min(x)))
 }
 
-# Identificar las columnas numéricas
 numerical_columns <- sapply(data, is.numeric)
-
 # Aplicar una transformación (por ejemplo, normalización) solo a las columnas numéricas
-data_Normalized <- data
+data_NoModified <- data
 ## normalize the iris numerical data
-data_Normalized[, numerical_columns] <- as.data.frame(lapply(data[, numerical_columns], normalize))
+data_NoModified[, numerical_columns] <- as.data.frame(lapply(data[, numerical_columns], normalize))
 ## confirm that normalization worked
-summary(data_Normalized)
+summary(data_NoModified)
 ```
 
 ### Train-Test Split
 
 ```{r}
 # Convertir las variables categóricas en variables dummy
-data_Normalized <- model.matrix(~ . - 1, data = data_Normalized)
+data_NoModified <- model.matrix(~ . - 1, data = data_NoModified)
 
 # Convertir el resultado a un data frame
-data_Normalized <- as.data.frame(data_Normalized)
+data_NoModified <- as.data.frame(data_NoModified)
 ```
 
 ```{r}
@@ -810,61 +795,27 @@ seeds <- c(1357, 2468, 3579, 4680, 5791)
 set.seed(seeds[1])
 
 ## Create an index to partition the data set
-ind <- sample(2, nrow(data_Normalized), replace=TRUE, prob=c(0.80, 0.20))
+ind <- sample(2, nrow(data_NoModified), replace=TRUE, prob=c(0.80, 0.20))
 
-data_Normalized.train <- data_Normalized[ind==1,]
-data_Normalized.test <- data_Normalized[ind==2,]
-```
-
-Veamos que se hayan hecho bien las particiones
-
-```{r}
-nrow(data_Normalized)
-nrow(data_Normalized.train)
-nrow(data_Normalized.test)
+data_NoModified.train <- data_NoModified[ind==1,]
+data_NoModified.test <- data_NoModified[ind==2,]
 ```
 
 ```{r}
-data$person_age <- cut(data$person_age, 
-                           breaks = c(20, 25, 30, 40, 50), 
-                           labels = c("20-25", "26-30", "31-40", "41-50"))
-
-data$person_income <- cut(data$person_income, 
-                              breaks = c(0, 50000, 100000, 250000), 
-                              labels = c("0-50k", "50k-100k", "+100k"))
-
-data$loan_amnt <- cut(data$loan_amnt, 
-                          breaks = c(0, 10000, 20000, 35000), 
-                          labels = c("0-10k", "10k-20k", "+20k"))
-
-data$loan_percent_income <- cut(data$loan_percent_income, 
-                                    breaks = c(0, 0.1, 0.2, 0.5), 
-                                    labels = c("0-0.1", "0.1-0.2", "+0.2"))
-
-                                    
-```
-
-Para definir estos nuevos intervalos nos hemos centrado en los rangos donde había una mayor concentración de los datos.
-
-```{r}
-## Create an index to partition the data set
-ind2 <- sample(2, nrow(data), replace = TRUE, prob = c(0.80, 0.20))
-data.train2 <- data[ind2 == 1, ]
-data.test2 <- data[ind2 == 2, ]
-
-# Crear el modelo
-ID3_2 <- J48(loan_status ~ person_age + person_income + loan_amnt + loan_percent_income, data = data.train2)
+nrow(data_NoModified)
+nrow(data_NoModified.train)
+nrow(data_NoModified.test)
 ```
 
 ```{r}
-summary(ID3_2)
+## Build the classifier
+data_NoModified.knn <- knn(data_NoModified.train[, 1:23], data_NoModified.test[, 1:23], cl = data_NoModified.train[, 24], k = 3)
+
+confusionMatrix(as.factor(data_NoModified.test$loan_status), data_NoModified.knn)
+F1_Score(data_NoModified.knn, data_NoModified.test$loan_status, positive = "0")
 ```
 
-Veamos como se comporta con el conjunto test
-
-```{r}
-data.ID32 <- predict(ID3_2, data.test2)
-confusionMatrix(data.ID32, data.test2$loan_status)
-```
+As we can see, both the F1 score and accuracy decrease, and the model itself is less efficient. By including 
+variables with high correlation, unnecessary data is added, which slows down the model.
 
 ## Conclusion
