@@ -63,8 +63,8 @@ MEDICAL, PERSONAL, VENTURE)
 - **loan_status**: The status of the loan (integer 1 = approved; 0 = rejected)
 
 ```{r}
-# Crear el gráfico de barras
-ggplot(data, aes(x = factor(loan_status, labels = c("Rechazado", "Aprobado")))) +
+# Create the bar plot
+ggplot(data, aes(x = factor(loan_status, labels = c("Rejected", "Approved")))) +
   geom_bar(fill = "skyblue") +
   labs(title = "Distribution of loan approval status",
        x = "Loan status",
@@ -204,7 +204,7 @@ numeric_Corr <- data[, c('person_age', 'person_income', 'person_emp_exp',
 ggcorr(numeric_Corr, label = TRUE)
 ```
 As we can see, 'credit_score' has little influence, as its correlations with the other variables are 
-virtually null, and it has no correlation with the target variable. Therefore, we will proceed to remove it. 
+virtually null and it has no correlation with the target variable. Therefore, we will proceed to remove it. 
 On the other hand, 'person_age', 'person_emp_exp', and 'cb_person_cred_hist_length' have a very high 
 correlation with each other, so we will remove 'person_emp_exp' and 'cb_person_cred_hist_length' to avoid 
 multicollinearity.
@@ -213,7 +213,7 @@ multicollinearity.
 # Supression of the variables
 data_Mod <- data[, -c(5, 11, 12)]
 
-# Verify the changes
+# Visualize the changes
 names(data_Mod)
 ```
 
@@ -222,8 +222,8 @@ names(data_Mod)
 ggcorr(data_Mod, label = TRUE, label_round = 2)
 ```
 
-Now we can see that the variable 'person_age' has no correlation with other variables or with the target 
-variable. Therefore, it does not contribute to the model, so we will proceed to remove it.
+Now we can see that the variable 'person_age' has little to no correlation with other variables or with the
+target variable. Therefore, it will not contribute to the model, so we will proceed to remove it.
 
 ```{r}
 data_Mod <- data_Mod[, -c(1)]
@@ -233,7 +233,7 @@ data_Mod <- data_Mod[, -c(1)]
 
 #### Numeric Variables
 
-Comparing the loan status with the all numerical variables to see if there is any relationship between them.
+Comparing the loan status with the all numerical variables, we can see if there is any relationship between them.
 
 ```{r}
 p1 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = person_income), fill = "#FFB6C1", alpha = 0.6) +
@@ -244,8 +244,8 @@ p1 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = person_in
 print(p1)
 ```
 
-Loan approval is inversly proportional to the applicant's income, higher incomes tend to have their loans 
-rejected. This information doesn't seem to make much sense to us, as you would think that loans taken by
+Loan approval is inversely proportional to the applicant's income, higher incomes tend to have their loans 
+rejected. This information doesn't seem to make much sense to us, as we would think that loans taken by
 people with higher income should be both safer and more profitable, however that is not the case here.
 
 
@@ -282,11 +282,13 @@ p4 <- ggplot(data_Mod) + geom_boxplot(aes(x = factor(loan_status), y = loan_int_
 
 print(p4)
 ```
-
+While the median interest rate for approved loans is higher than for rejected loans, approved loans have a
+wider range of interest rates, which means that the outcome of the request is not solely based on the
+interest rate.
 
 #### Categorical Variables
 
-Comparing the loan status with the all categorical variables to see if there is any relationship between them.
+Comparing the loan status with every categorical variable, we can see if there is any relationship between them.
 
 ```{r}
 p1 <- ggplot(data_Mod) +
@@ -356,12 +358,12 @@ As we can see, there are no missing values in the dataset, so we can proceed to 
 
 ### Key Features
 
-As we have already seen with the vioin plots, the 'previous_loan_defaults_on_file' variable is key to
+As we have already seen with the violin plots, the 'previous_loan_defaults_on_file' variable is key to
 predicting the loan status, as applicants who have had previous loan defaults are always rejected.
 
-Analyzing the correlation between the variables, it is observed that both person_income and loan_amnt,
-loan_int_rate, and loan_percent_income have a high correlation, therefore they are also important
-variables to consider.
+Analyzing the correlation between the variables, it is observed that person_income, loan_int_rate,
+loan_percent_income and, to a lesser extent, loan_amnt have a high correlation with the loan_status variable,
+therefore they are also important variables to consider.
 
 ### PreProcessing Data
 
@@ -398,7 +400,7 @@ skewness(sqrt(data_Mod$loan_amnt))
 skewness(log(data_Mod$loan_amnt))
 ```
 
-As we can see, both solve the asymmetry problem, but the square root transformation is more effective.
+As we can see, both solve the skewness problem, but the square root transformation is more effective.
 
 - **loan_int_rate**:
 
@@ -421,12 +423,13 @@ skewness(sqrt(data_Mod$loan_percent_income))
 skewness(log(data_Mod$loan_percent_income))
 ```
 
-As we can see, both solve the skewness problem, but the square root transformation is more effective.
+As we can see, both help improve the skewness problem, but the square root transformation is more effective
+and falls within the acceptable range.
 
 #### Creation of a better skewed dataset
 
 With all the transformations made, we proceed to create a new dataset with the transformed variables,
-as they better follow the normal distribution:
+as their distribution follows the normal distribution more closely:
 
 ```{r}
 data_Transformed <- data_Mod
@@ -471,12 +474,12 @@ normalize <- function(x) {
   return ((x - min(x)) / (max(x) - min(x)))
 }
 
-# Identificar las columnas numéricas
+# Identify the numerical columns
 numerical_columns <- sapply(data_Transformed, is.numeric)
 
-# Aplicar una transformación (por ejemplo, normalización) solo a las columnas numéricas
+# Apply a transformation (e.g., normalization) only to the numerical columns
 data_Normalized <- data_Transformed
-## normalize the iris numerical data
+# Normalize the numerical data
 data_Normalized[, numerical_columns] <- as.data.frame(lapply(data_Transformed[, numerical_columns], normalize))
 
 # Confirm that normalization worked
@@ -485,15 +488,15 @@ summary(data_Normalized)
 
 ### Train-Test Split
 
-Before splitting into train and test sets, it is important to know that for k-Nearest Neighbors and Naive 
+Before splitting into train and test sets, it is important to know that, for k-Nearest Neighbors and Naive 
 Bayes, all variables need to be numeric. For categorical variables, we use one-hot encoding to convert them 
 into numeric variables, where each category becomes a new binary column.
 
 ```{r}
-# Convertir las variables categóricas en variables one hot encoding
+# Convert categorical variables into numerical ones with one-hot encoding
 data_Normalized <- model.matrix(~ . - 1, data = data_Normalized)
 
-# Convertir el resultado a un data frame
+# Convert the result to a data frame
 data_Normalized <- as.data.frame(data_Normalized)
 ```
 
@@ -522,8 +525,8 @@ nrow(data_Normalized.test)
 
 ### Predictions
 
-We will start building the KNN model, where the independent variables range from position 1 to 20, and 
-loan_status is in position 21. We have chosen k=3 as the default value.
+We will start building the KNN model, where the independent variables range from position 1 to 19, and 
+loan_status is in position 20. We have chosen k=3 as the default value.
 
 ```{r}
 ## Build the classifier
@@ -539,8 +542,8 @@ low. This means that the model may be more prone to approving loans for cases wh
 This could have a **negative impact on the bank**, as it would have to take on more risks.
 
 To understand why it is important to convert categorical variables into numerical ones instead of ignoring 
-them, we will create a model using only the numerical variables. These range from the first to the fifth 
-column.
+them, we will create a model using only the numerical variables. These range from the first to the
+fifth column.
 
 ```{r}
 ## Build the classifier
@@ -565,7 +568,7 @@ confusionMatrix(as.factor(data_Normalized.test$loan_status), data_Normalized.knn
 ```
 
 In both new models, we don't see any substantial improvements that would justify changing the original model. 
-Additionally, the original model is the one that takes the least time to execute.
+Additionally, the original model is the one that takes the least time to run.
 
 ## Classification using Naive Bayes
 
@@ -583,8 +586,8 @@ the variables are conditionally independent, when in reality they are not.
 
 It should also be noted that, as we can see in the table, the model takes a more conservative approach when 
 it comes to evaluating loan profiles, therefore it is less likely to approve the loan request. Because of 
-this, this model may be prefered to KNN in this case, as the bank may prefer taking a safer approach by 
-rejecting more requests even though they should be valid rather than accepting more that shouldn't be valid
+this, this model may be preferred to k-NN in this case, as the bank may prefer taking a safer approach by 
+rejecting more requests even though they should be valid rather than accepting more that shouldn't be valid.
 
 ## Classification using Decision Trees
 
@@ -593,25 +596,25 @@ In order to use decision trees, we need to convert the numerical variables into 
 ### Conversion of Numerical Variables 
 
 ```{r}
-## Convertir las variables numéricas en categóricas, divididas en intervalos:
+# Conversion of numerical variables into categorical ones, divided into intervals:
 data_Mod$person_income <- cut(data$person_income, breaks = c(0, 50000, 100000, 150000, 200000, 250000), labels = c("0-50k", "50k-100k", "100k-150k", "150k-200k", "200k-250k"))
 data_Mod$loan_amnt <- cut(data$loan_amnt, breaks = c(0, 5000, 10000, 20000, 35000), labels = c("0-5k", "5k-10k", "10k-20k", "20k-35k"))
 data_Mod$loan_int_rate <- cut(data$loan_int_rate, breaks = c(5, 8.5, 11, 13, 20), labels = c("5-8.5", "8.5-11", "11-13", "13-20"))
 data_Mod$loan_percent_income <- cut(data$loan_percent_income, breaks = c(0, 0.1, 0.2, 0.3, 0.4, 0.67), labels = c("0-0.1", "0.1-0.2", "0.2-0.3", "0.3-0.4", "0.4-0.67"))
 
-#Hacemos lo mismo con la variable objetivo:
+# The same is done with the dependent variable
 data_Mod$loan_status <- as.factor(data_Mod$loan_status)
 ```
 
 ### ID3 Algorithm
 
 ```{r}
-## Create an index to partition the data set
+# Create an index to partition the data set
 ind1 <- sample(2, nrow(data_Mod), replace = TRUE, prob = c(0.80, 0.20))
 data_Mod.train1 <- data_Mod[ind1 == 1, ]
 data_Mod.test1 <- data_Mod[ind1 == 2, ]
 
-# Crear el modelo
+# Model creation
 ID3_1 <- J48(loan_status ~ person_income + loan_amnt + loan_int_rate + loan_percent_income, data = data_Mod.train1)
 ```
 
@@ -622,14 +625,14 @@ data_Mod.ID31 <- predict(ID3_1, data_Mod.test1)
 confusionMatrix(data_Mod.ID31, data_Mod.test1$loan_status)
 ```
 
-As we can see, we have an accuracy of 81.5%, which is not bad, but there is room for improvement.
+As we can see, we have an accuracy of 81.5%, which is not bad, but there still may be room for improvement.
 
 Now, we will add the rest of the categorical variables, based on the second model, with more optimal 
 intervals:
 
 
 ```{r}
-# Crear el modelo
+# Model creation
 ID3_2 <- J48(loan_status ~ ., data = data_Mod.train1)
 
 data_Mod.ID32 <- predict(ID3_2, data_Mod.test1)
@@ -645,11 +648,11 @@ without compromising accuracy.
 information.gain(loan_status ~ ., data = data_Mod)
 ```
 
-We generated a new tree using only the variables that are truly important. In this case, we have removed the 
+We generated a new tree using only the variables that are truly important. In this case, we have removed the
 3 variables with the least importance (person_gender, person_education, and loan_amnt):
 
 ```{r}
-# Crear modelo con las variables seleccionadas
+# Create model with selected variables
 ID2_Sel <- J48(loan_status ~ previous_loan_defaults_on_file + loan_percent_income + person_home_ownership + person_income + loan_intent, 
                data = data_Mod.train1)
 
@@ -659,8 +662,9 @@ F1_Score(data_Mod.ID2Sel, data_Mod.test1$loan_status, positive = "0")
 ```
 
 The accuracy has dropped to 87.3%, a decrease of 3%. Nevertheless, we believe the model has been 
-significantly optimized, as by removing 3 variables, it produces far fewer nodes. Depending on the purpose,
-a 3% drop may not be worth it.
+significantly optimized as, by removing 3 variables, it produces far fewer nodes. Depending on the purpose,
+a 3% drop may not be worth it. Not only that, but the amount of incorrect approvals has also decreased,
+which is beneficial for the bank.
 
 
 ### C5.0 Algorithm
@@ -672,7 +676,7 @@ confusionMatrix(data_Mod.C50, data_Mod.test1$loan_status)
 F1_Score(data_Mod.C50, data_Mod.test1$loan_status, positive = "0")
 ```
 
-We observe a slight improvement compared to the ID3 model, but it is not significant. This may be due to the 
+We observe a slight improvement compared to the ID3 model, but it is not significant. This may be due to the
 fact that not all partitions are distributed in the same way, so the C5.0 model may benefit in this case. 
 However, the improvement is almost negligible.
 
@@ -697,8 +701,8 @@ confusionMatrix(data_Mod.rpart, data_Mod.test1$loan_status)
 F1_Score(data_Mod.rpart, data_Mod.test1$loan_status, positive = "0")
 ```
 
-Yet again, the results given by the decision tree are similar to the ones given by previous tree models.
-In this case, it can be seen that this model is very reluctant to approving loans, so it may be a good model to use if the bank wants to be more conservative, as it offers a good enough accuracy while outputing safer results. 
+Yet again, the results given by the decision tree are similar to the ones given by previous tree models, so
+there isn't much to say about it.
 
 ### Decision Tree using Tree
 
@@ -722,26 +726,26 @@ without omitting any variables.
 ```{r}
 data <- read.csv("./loan_data.csv", header=TRUE, stringsAsFactors=TRUE)
 
-# Identificar las columnas numéricas y de tipo factor
+# Identify the numeric and factor columns
 numerical_columns <- sapply(data, is.numeric)
 factor_columns <- sapply(data, is.factor)
 
-# Excluir la variable objetivo de las columnas numéricas y de tipo factor
+# Exclude the target variable
 numerical_columns <- numerical_columns & names(data) != "loan_status"
 
-# Ordenar las columnas: primero las numéricas, luego las de tipo factor, y finalmente la variable objetivo
+# Sort the columns: first the numeric ones, then the factor ones, and finally the target variable
 ordered_columns <- c(names(data)[numerical_columns], 
                      names(data)[factor_columns], 
                      "loan_status")
 
-# Reordenar el data frame
+# Sort the DataFrame
 data <- data[, ordered_columns]
 ```
 
 ### Data Normalization
 
 ```{r}
-## create normalization function
+# Create normalization function
 normalize <- function(x) {
   return ((x - min(x)) / (max(x) - min(x)))
 }
@@ -749,28 +753,28 @@ normalize <- function(x) {
 numerical_columns <- sapply(data, is.numeric)
 
 data_NoModified <- data
-## normalize the numerical data
+# Normalize the numerical data
 data_NoModified[, numerical_columns] <- as.data.frame(lapply(data[, numerical_columns], normalize))
-## confirm that normalization worked
+# Confirm that normalization worked
 summary(data_NoModified)
 ```
 
 ### Train-Test Split
 
 ```{r}
-# Convertir las variables categóricas en variables dummy
+# Convert categorical variables into dummy variables
 data_NoModified <- model.matrix(~ . - 1, data = data_NoModified)
 
-# Convertir el resultado a un data frame
+# Convert the result to a DataFrame
 data_NoModified <- as.data.frame(data_NoModified)
 ```
 
 ```{r}
-## To reproduce the calculations
+# To reproduce the calculations
 seeds <- c(1357, 2468, 3579)
 set.seed(seeds[1])
 
-## Create an index to partition the data set
+# Create an index to partition the data set
 ind <- sample(2, nrow(data_NoModified), replace=TRUE, prob=c(0.80, 0.20))
 
 data_NoModified.train <- data_NoModified[ind==1,]
@@ -784,7 +788,7 @@ nrow(data_NoModified.test)
 ```
 
 ```{r}
-## Build the classifier
+# Build the classifier
 data_NoModified.knn <- knn(data_NoModified.train[, 1:23], data_NoModified.test[, 1:23], cl = data_NoModified.train[, 24], k = 3)
 
 confusionMatrix(as.factor(data_NoModified.test$loan_status), data_NoModified.knn)
@@ -797,17 +801,13 @@ variables with high correlation, unnecessary data is added, which slows down the
 ## Conclusion
 
 Our main objective was to understand what factors influence loan approvals and to create a model that 
-accurately predict whether a loan would be approved or not.
+could accurately predict whether a loan should be approved or not.
 
-Our first task was dealing with the data, due to the fact that our dataset contained 45000 loan applications 
-with 13 different attributes numerical and categorical and an objective variable telling us if the loan was 
-approved or rejected.
-
-As we explored the data, we discovered some 'odds' like applicants with unrealistically high ages and 
+As we explored the data, we discovered some oddities, like applicants with unrealistically high ages and 
 incomes, or loan percentages that didn't make sense. To ensure our models were working with reliable 
 information, we cleaned up these anomalies so the data reflected realistic scenarios.
 
-Using differents plots and transformations we examined how each variable behaved and how it related to the 
+Using different plots and transformations we examined how each variable behaved and how it related to the 
 loan approval status. This exploratory analysis revealed some key insights:
 
 - **Influential Factors:** Variables like previous_loan_defaults_on_file were strong indicators of whether a 
@@ -816,14 +816,16 @@ loan would be approved.
 - **Data Skewness:** Many numerical variables were skewed to the right, which meant we needed to adjust them 
 to better fit the models we planned to use. 
 
-As has been said before, we applied transformations like logarithms and square roots to improve the skewness, 
+As we said earlier, we applied transformations like logarithms and square roots to improve the skewness, 
 because those models work better when data is normally distributed.
 
 We also looked at how the variables were correlated with each other. We found that some variables, such as 
 person_age, person_emp_exp and cb_person_cred_hist_length, were highly correlated. To avoid issues like 
-multicollinearity—which can negatively impact model performance—we decided to remove these variables.
+multicollinearity, which can negatively impact model performance, we decided to remove these variables.
+Then, we chose to trim the persone_age variable (and its correlated variables), as it didn't seem to have a
+significant impact on the loan status.
 
-With our data prepped and ready, we built and evaluated several classification models.
+With our data cleaned up and normalized, we were ready to build and evaluate several classification models.
 
 **1. k-Nearest Neighbors (KNN):**
 
@@ -832,9 +834,11 @@ We tried different values of k and found that k=3 gave us the best results.
 
 **2. Naive Bayes:**
 
+We didn't have to tweak any parameters as the Naive Bayes algorithm is very straightforward.
+
 **3. Decision Trees:**
 
-We explored various algorithms, including ID3, C5.0, CART, and we used packages like rpart and tree.
+We explored various algorithms, including ID3, C5.0 and CART. We used packages like rpart and tree.
 
 The ID3 algorithm, when using all variables, reached about 90.3% accuracy.
 Simplifying the model by focusing on the most important features slightly reduced accuracy to 87.3%, but made 
@@ -844,7 +848,7 @@ The C5.0, CART and the other algorithms offered slight improvements over ID3, bu
 
 To ensure our decision to exclude certain variables, we ran additional tests without omitting any features. 
 The results confirmed that including highly correlated variables didn't improve model performance and 
-sometimes even reduced accuracy due to added complexity.
+sometimes even reduced accuracy due to added complexity, so we were right to exclude them.
 
 ### Testing different seeds of train/test
 
@@ -938,19 +942,31 @@ and train-test splits.
 
 ### Choosing the best model
 
-After extensive testing with different seeds and train-test splits, it became evident that the Decision Tree using the C5.0 algorithm
-consistently outperformed the other models. 
+After extensive testing with different seeds and train-test splits, it became evident that the Decision Tree
+using the C5.0 algorithm consistently outperformed the other models. 
 
-Across various seeds and data splits, the C5.0 model maintained an accuracy of around 90.2% to 90.7% and an F1-Score 
-in the vicinity of 0.938 to 0.941.
+Across various seeds and data splits, the C5.0 model maintained an accuracy of around 90.2% to 90.7% and an
+F1-Score within the range of 0.938 to 0.941.
+
+With that being said, the entity employing the model may choose to prioritize safety over profit, so they
+would be more interested in using the ID3 model, which is a bit more conservative in its loan approval
+decisions. This can also be said about the Naive Bayes model, which is significantly less accurate than
+other models (up to around 10%), but is also considerably more conservative, minimizing wrong approvals.
 
 ### Our Learnings
 
-We realized how crucial it is to start with clean, accurate data. Handling outliers and missing values can dramatically affect model performance.
+We realized how crucial it is to start with clean, accurate data. Handling outlier samples and missing values
+can dramatically affect model performance. The same can be said about our efforts in normalizing
+distributions and removing redundant variables.
 
-Our efforts in normalizing distributions and removing multicollinear variables paid off.
+By experimenting with different algorithms, we saw firsthand how models like Naive Bayes, KNN, and decision
+trees behave under various conditions. 
 
-By experimenting with different algorithms, we saw firsthand how models like Naive Bayes, KNN, and decision trees behave under various conditions. 
+### References
 
-### Final Conclusion
-
+- [R Documentation] (https://www.rdocumentation.org/): Used to understand some of the functions and packages
+  used in our analysis.
+- [ChatGPT] (chatgpt.com): Used for help in making sense of the data, translation of some text originally
+  written in Spanish and removal of certain warnings generated by library functions.
+- [RMD files from class]: Used as a reference for the structure of the document and as examples of
+  model implementation.
