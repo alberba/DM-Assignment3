@@ -1,6 +1,6 @@
 ---
 title: "Assignment 3"
-author: "Santiago Rattenbach, Angel Jiménez, Albert Salom"
+author: "Santiago Rattenbach, Àngel Jiménez, Albert Salom"
 date: "21/11/2024"
 output: html_document
 ---
